@@ -1,0 +1,14 @@
+{
+  "version": "wave5-local-control-v1",
+  "fixed_before_control_scoring": true,
+  "population": "100 assistant-labelled control cases; provisional silver labels, previously visible to assistant, NOT blind human ground truth",
+  "input_integrity": "Check original frozen SHA-256 for rules, taxonomy, dev and control before running",
+  "metrics": ["category accuracy and per-class confusion", "priority macro-F1 across all four classes and present classes", "language accuracy by reference class", "human review rate and missed mandatory cases", "citation integrity with denominators", "unrated retrieval relevance", "local HTTP latency including JSON serialization", "draft characters and bounded context characters"],
+  "latency": "Nearest-rank p95, three measured sequential localhost HTTP passes over 100 cases after five excluded warmups; cold startup reported separately; no production claim",
+  "cost": "Only model API charge can be zero in offline template mode; infrastructure and labor costs unmeasured. Missing live usage or prices is null, never zero. No guessed model prices.",
+  "blind_review": "100 anonymously shuffled control cases, no labels/version/provenance in reviewer packet, separate coordinator key; correctness, usefulness, language and promises left blank for people",
+  "kk_coverage": "Only one KK-labelled real control case; report this shortage and keep any synthetic supplements separate",
+  "optimization": "Before scoring control: four messages of 800 chars, two rule excerpts of 1000 chars, max output tokens 900, two default clarification questions, exact-match verified support templates. No adaptation to control errors.",
+  "live_model_calls": 0,
+  "status_of_human_review": "pending_user_arranged_reviewers"
+}

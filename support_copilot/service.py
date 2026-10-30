@@ -1,5 +1,6 @@
 """Shared inference entry point: Wave 2 analysis plus guarded Wave 3 drafts."""
 import re
+import os
 from support_copilot.knowledge import get_knowledge, normalize
 from support_copilot.schemas import DraftReply, Extracted, TriageRequest, TriageResponse
 from support_copilot.safety import assess, safety_view
@@ -139,9 +140,21 @@ def analyze(request: TriageRequest) -> TriageResponse:
     )
 
 
-def triage(request: TriageRequest, *, draft_provider=None, use_configured_provider: bool = True) -> TriageResponse:
+def triage(request: TriageRequest, *, draft_provider=None, use_configured_provider: bool = True,
+           use_verified_templates: bool | None = None) -> TriageResponse:
     from support_copilot.drafting import add_draft
     result = analyze(request)
     result.reasons.remove('draft_generator_not_connected')
+    # Explicitly injected providers exercise their path; normal API/CLI requests
+    # can skip generation entirely for narrow, verified support workflows.
+    templates = os.environ.get('COPILOT_VERIFIED_TEMPLATES','on') == 'on' if use_verified_templates is None else use_verified_templates
+    if draft_provider is None and templates:
+        from support_copilot.verified_templates import match_template, reply
+        template = match_template(request,result)
+        if template:
+            result.draft_reply = reply(template,result)
+            result.draft_available = True
+            result.reasons.append('verified_template:'+template)
+            return result
     return add_draft(request, result, get_knowledge(), provider=draft_provider,
                      use_configured_provider=use_configured_provider)

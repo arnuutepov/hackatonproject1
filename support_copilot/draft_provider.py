@@ -8,6 +8,9 @@ from urllib.parse import urlparse
 
 from support_copilot.schemas import ContractModel, Language
 from typing import Literal
+from support_copilot.costing import parse_usage
+
+MAX_OUTPUT_TOKENS = 900
 
 Question = Literal['server', 'nickname', 'incident_time', 'evidence_link',
                    'payment_details', 'account_details', 'bug_steps', 'question_details', 'preferred_language']
@@ -74,7 +77,7 @@ Never promise punishment, refund, unban, a processing deadline, or completed han
 We produce a draft for an operator; no real ticket transfer or game action has happened.
 Never reduce needs_human_minimum. Choose human_review for personal actions or appeals;
 clarify when context is missing. Rule_review requires a relevant citation and human review.
-Questions must come from allowed_questions; choose up to 3 useful missing details.
+Questions must come from allowed_questions; prefer at most 2 useful missing details.
 Do not request passwords, tokens, payment card data, or complete bank documents.
 Return only the required JSON plan. No free-form reply text or additional fields.'''
 
@@ -92,9 +95,11 @@ class ResponsesProvider:
         if official and not api_key:
             raise DraftFailure('draft_not_configured')
         self.model, self.api_key, self.endpoint, self.timeout = model, api_key, endpoint, timeout
+        self.last_usage, self.response_model = None, None
 
     def generate(self, context: dict) -> str:
-        body = {'model': self.model, 'store': False, 'max_output_tokens': 1400,
+        self.last_usage, self.response_model = None, None
+        body = {'model': self.model, 'store': False, 'max_output_tokens': MAX_OUTPUT_TOKENS,
                 'input': [{'role': 'system', 'content': SYSTEM},
                           {'role': 'user', 'content': json.dumps(context, ensure_ascii=False)}],
                 'text': {'format': {'type': 'json_schema', 'name': 'support_reply_plan',
@@ -114,6 +119,8 @@ class ResponsesProvider:
             if len(raw) > 65536:
                 raise DraftFailure('draft_provider_oversized')
             result = json.loads(raw)
+            self.last_usage = parse_usage(result.get('usage'))
+            self.response_model = result.get('model') if isinstance(result.get('model'),str) else None
             if result.get('status') != 'completed':
                 raise DraftFailure('draft_provider_incomplete')
             messages = [item for item in result.get('output', []) if item.get('type') == 'message']

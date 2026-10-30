@@ -54,7 +54,7 @@ def evaluate() -> dict:
                           no_established_violation=draft.established_facts == [],
                           escalation=not case['must_human'] or result.needs_human,
                           nonempty_draft=bool(draft.text.strip()) and result.draft_available,
-                          model_or_fallback=(draft.provenance == 'validated_model_plan') if mode == 'valid_plan_replay' and case['lang'] != 'und' else draft.provenance == 'safe_template')
+                          model_or_fallback=(draft.provenance == 'validated_model_plan') if mode == 'valid_plan_replay' and case['lang'] != 'und' else draft.provenance in {'safe_template','verified_template'})
             results.append(dict(case=case['id'], language=case['lang'], mode=mode, passed=all(checks.values()),
                                 checks=checks, provenance=draft.provenance))
     return dict(protocol='wave3-offline-synthetic-v1', real_model_calls=0,

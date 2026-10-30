@@ -1,0 +1,9 @@
+{
+  "model": "replace-with-the-actual-response-model",
+  "input_per_million": null,
+  "cached_input_per_million": null,
+  "output_per_million": null,
+  "source_url": "",
+  "checked_at": "",
+  "note": "Populate verified current prices for your actual model; no default model prices are assumed. Infrastructure, taxes, tools and human labor are excluded."
+}

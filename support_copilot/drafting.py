@@ -9,6 +9,23 @@ from support_copilot.citation_policy import STOP, relevant
 from support_copilot.draft_text import TEXT
 from support_copilot.knowledge import Knowledge
 from support_copilot.schemas import DraftReply, TriageRequest, TriageResponse
+from support_copilot.costing import configured_prices, estimate_cost
+
+CONTEXT_LIMITS = dict(messages=4,message_chars=800,rules=2,rule_chars=1000)
+
+
+def capture_usage(result: TriageResponse,provider) -> None:
+    value=getattr(provider,'last_usage',None)
+    if not isinstance(value,dict):
+        return
+    from support_copilot.costing import parse_usage
+    usage=parse_usage({'input_tokens':value.get('input_tokens'),'output_tokens':value.get('output_tokens'),
+                       'input_tokens_details':{'cached_tokens':value.get('cached_tokens'),
+                                               'cache_write_tokens':value.get('cache_write_tokens',0)}})
+    result.generation.usage=usage
+    result.generation.api_cost_usd=estimate_cost(usage,getattr(provider,'response_model',None),configured_prices())
+    if result.generation.api_cost_usd is not None:
+        result.generation.cost_status='usage_pricing_estimate'
 
 
 def topic_for(result: TriageResponse) -> str:
@@ -38,9 +55,9 @@ def allowed_questions(result: TriageResponse, topic: str) -> list[str]:
 
 def build_context(request: TriageRequest, result: TriageResponse, knowledge: Knowledge) -> tuple[dict, bool]:
     player = [(f'm{index}', message.text) for index, message in enumerate(request.messages) if message.role == 'player']
-    selected = player if len(player) <= 6 else player[:2] + player[-4:]
-    truncated = len(selected) != len(player) or any(len(text) > 1000 for _, text in selected)
-    messages = [{'id': key, 'text': text[:1000]} for key, text in selected]
+    selected = player if len(player) <= CONTEXT_LIMITS['messages'] else player[:1] + player[-3:]
+    truncated = len(selected) != len(player) or any(len(text) > CONTEXT_LIMITS['message_chars'] for _, text in selected)
+    messages = [{'id': key, 'text': text[:CONTEXT_LIMITS['message_chars']]} for key, text in selected]
     rules = []
     candidates = [] if set(result.safety_flags) & CITATION_BLOCKERS else result.retrieved_rules
     for candidate in candidates:
@@ -51,8 +68,8 @@ def build_context(request: TriageRequest, result: TriageResponse, knowledge: Kno
         query = ' '.join(item['text'] for item in messages)
         if not relevant(result.category, result.detected_topics, query, rule):
             continue
-        rules.append({'source_id': rule.source_id, 'section': rule.section, 'text': rule.text[:2000]})
-        if len(rules) == 3:
+        rules.append({'source_id': rule.source_id, 'section': rule.section, 'text': rule.text[:CONTEXT_LIMITS['rule_chars']]})
+        if len(rules) == CONTEXT_LIMITS['rules']:
             break
     topic = topic_for(result)
     return dict(lang=result.lang, kind=request.kind, category=result.category, topic=topic,
@@ -161,7 +178,11 @@ def add_draft(request: TriageRequest, result: TriageResponse, knowledge: Knowled
         if reason not in {'draft_language_not_supported', 'draft_language_unknown'}:
             selected = provider if provider is not None else (configured_provider() if use_configured_provider else None)
         if selected is not None:
+            result.generation.attempts = 1
+            result.generation.api_cost_usd = None
+            result.generation.cost_status = 'unmeasured'
             raw = generate_with_deadline(selected, context, draft_timeout())
+            capture_usage(result,selected)
             plan = validate_plan(raw, context, knowledge)
             result.draft_reply = render(plan, result, topic_for(result), provenance='validated_model_plan')
             result.needs_human = result.needs_human or plan.needs_human
@@ -173,11 +194,17 @@ def add_draft(request: TriageRequest, result: TriageResponse, knowledge: Knowled
         code = str(exc)
         reason = code if code in FAILURE_CODES else 'draft_provider_error'
         result.needs_human = True
+        if result.generation.attempts and reason not in {'draft_provider_busy','draft_provider_timeout'}:
+            capture_usage(result,selected)
+        if reason == 'draft_provider_busy':
+            result.generation.attempts = 0
+            result.generation.api_cost_usd = 0.0
+            result.generation.cost_status = 'no_api_calls'
     except Exception:
         reason = 'draft_provider_error'
         result.needs_human = True
     human = result.needs_human or context['needs_human_minimum']
-    questions = context['allowed_questions'][:3]
+    questions = context['allowed_questions'][:2]
     if topic_for(result) == 'question' and context['lang'] != 'und':
         # No game-mechanics answer was validated. Avoid asking players to repeat
         # a clear question merely because our knowledge base cannot answer it.

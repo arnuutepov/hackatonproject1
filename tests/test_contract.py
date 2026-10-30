@@ -67,4 +67,4 @@ def test_input_cannot_be_overwritten(tmp_path):
 
 
 def test_health_identifies_baseline():
-    assert client.get("/health").json()['mode'] == 'wave_4_safety_regressions'
+    assert client.get("/health").json()['mode'] == 'wave_5_measured_local'
