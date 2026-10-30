@@ -178,8 +178,8 @@ def test_long_context_bounded_and_escalated():
     req = TriageRequest(kind='report', messages=[{'role': 'player', 'text': 'Как получить лицензию? ' + 'а'*1800} for _ in range(12)])
     model = FakeModel()
     result = triage(req, draft_provider=model)
-    assert len(model.context['messages']) == 6
-    assert all(len(item['text']) <= 1000 for item in model.context['messages'])
+    assert len(model.context['messages']) == 4
+    assert all(len(item['text']) <= 800 for item in model.context['messages'])
     assert result.needs_human and 'draft_context_truncated' in result.reasons
 
 

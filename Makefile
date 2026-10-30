@@ -22,6 +22,12 @@ eval-drafts:
 eval-regressions:
 	$(PYTHON) -m support_copilot.evaluate_regressions --output outputs/wave-4/regressions.json
 
+measure:
+	$(PYTHON) -m support_copilot.measure --output outputs/wave-5
+
+benchmark:
+	$(PYTHON) -m support_copilot.benchmark --output outputs/wave-5/http-latency.json
+
 audit-data:
 	@test -n "$(IN)" -a -n "$(OUT)" || (echo 'Usage: make audit-data IN=data/tickets_train.jsonl.gz OUT=outputs/audit.json' >&2; exit 2)
 	$(PYTHON) -m support_copilot.dataset audit --input "$(IN)" --output "$(OUT)"

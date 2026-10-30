@@ -56,9 +56,16 @@ class DraftReply(ContractModel):
     text: str
     cited: list[str] = Field(default_factory=list)
     action: Literal['clarify', 'human_review', 'rule_review'] = 'clarify'
-    provenance: Literal['safe_template', 'validated_model_plan'] = 'safe_template'
+    provenance: Literal['safe_template', 'validated_model_plan', 'verified_template'] = 'safe_template'
     player_claim: DraftAllegation | None = None
     established_facts: list[str] = Field(default_factory=list)
+
+
+class GenerationStats(ContractModel):
+    attempts: int = 0
+    usage: dict[str, int] | None = None
+    api_cost_usd: float | None = 0.0
+    cost_status: Literal['no_api_calls','unmeasured','usage_pricing_estimate'] = 'no_api_calls'
 
 
 class TriageResponse(ContractModel):
@@ -77,3 +84,4 @@ class TriageResponse(ContractModel):
     confidence_method: str = 'lexical_heuristic_uncalibrated'
     detected_topics: list[str] = Field(default_factory=list)
     safety_flags: list[str] = Field(default_factory=list)
+    generation: GenerationStats = Field(default_factory=GenerationStats)

@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Serve', 'Test', 'Evaluate', 'DraftEvaluate', 'RegressionEvaluate', 'Predict')][string]$Mode = 'Serve',
+    [ValidateSet('Serve', 'Test', 'Evaluate', 'DraftEvaluate', 'RegressionEvaluate', 'Measure', 'Benchmark', 'Predict')][string]$Mode = 'Serve',
     [switch]$Install,
     [string]$PythonPath,
     [string]$EnvironmentPath = '.venv',
@@ -36,6 +36,8 @@ try {
         'Evaluate' { & $venvPython -m support_copilot.evaluate --output outputs/wave-2/dev-metrics.json }
         'DraftEvaluate' { & $venvPython -m support_copilot.evaluate_drafts --output outputs/wave-3/synthetic-safety.json }
         'RegressionEvaluate' { & $venvPython -m support_copilot.evaluate_regressions --output outputs/wave-4/regressions.json }
+        'Measure' { & $venvPython -m support_copilot.measure --output outputs/wave-5 }
+        'Benchmark' { & $venvPython -m support_copilot.benchmark --output outputs/wave-5/http-latency.json }
         'Predict' {
             if (-not $InputFile -or -not $OutputFile) { throw 'Specify -InputFile and -OutputFile' }
             & $venvPython -m support_copilot.cli --input $InputFile --output $OutputFile
