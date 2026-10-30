@@ -146,3 +146,20 @@ TEXT['pt'] = {
 TEXT['und'] = {**TEXT['en'], 'hello': '', 'other': '',
                'human_review': '', 'clarify': '', 'attachments': '',
                'questions': {'preferred_language': 'На каком языке вам удобнее продолжить? / Which language would you prefer?'}}
+
+for _lang, _contradiction, _mixed in [
+    ('ru', 'В сообщениях есть расхождения. Уточните, какие сведения верны; до проверки вывод о нарушении не делается.',
+     'В обращении несколько важных тем; каждую необходимо отдельно проверить сотруднику поддержки.'),
+    ('kk', 'Хабарламаларда қайшылық бар. Қай мәлімет дұрыс екенін нақтылаңыз; тексеруге дейін ереже бұзушылық туралы қорытынды жасалмайды.',
+     'Өтініште бірнеше маңызды мәселе бар; әрқайсысын қолдау қызметінің маманы жеке тексеруі қажет.'),
+    ('uz', 'Xabarlarda qarama-qarshilik bor. Qaysi ma’lumot to‘g‘riligini aniqlashtiring; tekshiruvgacha qoidabuzarlik haqida xulosa qilinmaydi.',
+     'Murojaatda bir nechta muhim masala bor; har birini qo‘llab-quvvatlash xizmati xodimi alohida tekshirishi kerak.'),
+    ('en', 'The messages contain conflicting details. Please clarify which information is correct; no violation is established here.',
+     'This request covers several sensitive issues; support staff need to review each separately.'),
+    ('es', 'Los mensajes contienen datos contradictorios. Aclare cuáles son correctos; aquí no se establece ninguna infracción.',
+     'La solicitud incluye varios asuntos sensibles; el personal debe revisar cada uno por separado.'),
+    ('pt', 'As mensagens contêm detalhes contraditórios. Esclareça quais estão corretos; nenhuma infração é estabelecida aqui.',
+     'A solicitação inclui várias questões sensíveis; o suporte precisa analisar cada uma separadamente.'),
+]:
+    TEXT[_lang]['contradiction'] = _contradiction
+    TEXT[_lang]['mixed_topics'] = _mixed

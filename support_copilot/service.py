@@ -2,15 +2,16 @@
 import re
 from support_copilot.knowledge import get_knowledge, normalize
 from support_copilot.schemas import DraftReply, Extracted, TriageRequest, TriageResponse
+from support_copilot.safety import assess, safety_view
 
 # Transparent dev heuristics. Admin outcomes and control labels are not inputs.
 TOPICS = {
     'payment': r'донат|плат[её]ж|оплат|списал|пополнени|payment|paid|donat|to[ʻ’\x27]?lov|төлем',
-    'account': r'взлом|аккаунт|акк\b|доступ|парол|не могу войти|пропал.*(?:машин|имущество)|hacked|account|akkaunt|password|login',
+    'account': r'взлом|аккаунт|акк\b|доступ|парол|не могу войти|пропал[^\n]{0,80}(?:машин|имущество)|hacked|account|akkaunt|password|login',
     'admin': r'админ|обжал|апелляц|разбан|не согласен|незаконн|\bбан(?:а|у|ом|е|ы|ить|ил[аи]?|ят|ен|или)?\b|забан|\bмут(?:а|ом|е|ы|ить|ил[аи]?|ят)?\b|наказан|unban|appeal|admin|ban berd',
     'cheat': r'\bчит|\bаим|\baimbot|\bcheat|летает|сквозь стен|через стен',
     'scam': r'обман|мошенн|скам|украл|scam|aldadi|алдап',
-    'rmt_ads': r'реклам|реал(?:ьные|ьных)? день|прода[её]т.*акк|rmt|reklama',
+    'rmt_ads': r'реклам|реал(?:ьные|ьных)? день|прода[её]т[^\n]{0,80}акк|rmt|reklama',
     'insult': r'оск|оскорб|обзыв|матер|токсич|расизм|insult|so[ʻ’\x27]?k|haqorat|балағат',
     'dm': r'\bдм|\bdm\b|убил|убива|стреля|давит|задавил|таран|kill|otdi|o[ʻ’\x27]?ldir|өлтір',
     'help': r'застр|баг|текстур|вылет|лагает|телепорт|stuck|bug|qotib|тұрып қал',
@@ -21,10 +22,14 @@ PATTERNS = {key: re.compile(value, re.I) for key, value in TOPICS.items()}
 
 def language(text: str) -> tuple[str, str | None]:
     t = normalize(text)
-    if re.search(r'[їєґ]', t) or re.search(r'\b(будь ласка|мене|чому|гравець)\b', t):
+    if re.search(r'[їєґ]', t) or re.search(r'\b(будь ласка|мене|чому|гравець|мій|допоможіть)\b', t):
         return 'und', 'recognized_uk_outside_contract'
-    if re.search(r'[әғқңөұүһі]', t):
+    if re.search(r'[ўҳ]', t):
+        return 'uz', None
+    if re.search(r'[әңөұүһі]', t) or re.search(r'\bқалай\b', t):
         return 'kk', None
+    if re.search(r'[қғ]', t):
+        return 'und', 'language_shared_script_ambiguous'
     if re.search(r'[ўқғҳ]', t) or re.search(r"\b(salom|yordam|menga|iltimos|qanday|qayer|nima|men|uchun|bilan|bering|yo[ʻ’']q)\b", t):
         return 'uz', None
     if re.search(r'[а-я]', t):
@@ -45,9 +50,13 @@ def analyze(request: TriageRequest) -> TriageResponse:
     knowledge = get_knowledge()
     # Reported player's quotes do not establish the reporter's intent.
     text = '\n'.join(message.text for message in request.messages if message.role == 'player')
-    t = normalize(text)
-    lang, language_note = language(text)
+    assessment = assess(request)
+    t = safety_view(text)
+    lang, language_note = language(t)
     topics = {key for key, pattern in PATTERNS.items() if pattern.search(t)}
+    topics.update(assessment.topics)
+    if assessment.flags & {'mixed_language_requires_review', 'suspected_kazakh_encoding'}:
+        lang, language_note = 'und', None
     category, certainty = None, 0.0
     if request.kind == 'report':
         for topic, code in [('payment', 'payment'), ('account', 'account'), ('admin', 'complaint'),
@@ -67,7 +76,7 @@ def analyze(request: TriageRequest) -> TriageResponse:
     if category not in knowledge.categories or knowledge.categories[category]['kind'] != request.kind:
         raise ValueError('Category incompatible with taxonomy')
     critical = bool(topics & {'payment', 'account'}) or bool(re.search(
-        r'массов.*баг|(?:все|всех).*вылета|mass.*bug|угро[зж].*(?:жизн|реал)|убью.*(?:реал|жизн)|kill you.*real', t))
+        r'массов[^\n]{0,100}баг|(?:все|всех)[^\n]{0,100}вылета|mass[^\n]{0,100}bug|угро[зж][^\n]{0,100}(?:жизн|реал)|убью[^\n]{0,100}(?:реал|жизн)|kill you[^\n]{0,100}real', t))
     if critical:
         priority = 'p0'
     elif topics & {'cheat', 'rmt_ads'} or ('scam' in topics and re.search(r'миллион|млн|крупн|million', t)):
@@ -90,8 +99,8 @@ def analyze(request: TriageRequest) -> TriageResponse:
         if alias.upper() not in references:
             references.append(alias.upper())
             resolutions.append(dict(reference=alias.upper(), status='ambiguous', candidates=knowledge.resolve(alias)))
-    incomplete = certainty == 0 or lang == 'und' or any(item['status'] != 'resolved' for item in resolutions)
-    human = (critical or category in knowledge.human_always or request.kind == 'complaint'
+    incomplete = bool(assessment.flags) or certainty == 0 or lang == 'und' or any(item['status'] != 'resolved' for item in resolutions)
+    human = (bool(assessment.flags) or critical or category in knowledge.human_always or request.kind == 'complaint'
              or category == 'report.complaint' or 'admin' in topics or incomplete)
     reasons = ['wave_2_lexical_baseline', 'confidence_is_uncalibrated', 'draft_generator_not_connected',
                'duplicate_detection_not_implemented']
@@ -103,6 +112,7 @@ def analyze(request: TriageRequest) -> TriageResponse:
         reasons.append('human_review_required_no_personal_action')
     if incomplete:
         reasons.append('insufficient_context_or_ambiguous_reference')
+    reasons.extend(sorted(assessment.flags))
     attachments = sum(message.attachments for message in request.messages)
     if attachments:
         reasons.append('attachments_reported_not_inspected')
@@ -120,11 +130,12 @@ def analyze(request: TriageRequest) -> TriageResponse:
     return TriageResponse(
         lang=lang, category=category, priority=priority, is_spam_or_duplicate=False,
         extracted=Extracted(nickname=nickname.group() if nickname else None, rule_refs=references,
-                            server=server.group(1) if server else None, attachments_claimed=attachments,
+                            server=server.group(1) if server and 'conflicting_observable_fields' not in assessment.flags else None, attachments_claimed=attachments,
                             has_evidence=False),
         draft_reply=DraftReply(lang=lang, text=notices[lang]), needs_human=human,
         confidence=certainty if not incomplete else min(certainty, .25), reasons=reasons,
         retrieved_rules=knowledge.search(text), reference_resolutions=resolutions,
+        detected_topics=sorted(topics), safety_flags=sorted(assessment.flags),
     )
 
 

@@ -38,6 +38,7 @@ class DraftFailure(Exception):
 
 
 FAILURE_CODES = frozenset({
+    'draft_provider_timeout', 'draft_provider_busy', 'draft_citation_blocked_by_safety', 'draft_claim_blocked_by_safety',
     'draft_invalid_configuration', 'draft_not_configured', 'draft_provider_oversized',
     'draft_provider_incomplete', 'draft_provider_refusal', 'draft_provider_invalid_envelope',
     'draft_provider_unavailable', 'draft_invalid_output', 'draft_wrong_language',
@@ -45,6 +46,16 @@ FAILURE_CODES = frozenset({
     'draft_missing_clarification', 'draft_ungrounded_claim', 'draft_invalid_citation',
     'draft_irrelevant_citation', 'draft_missing_citation',
 })
+
+
+def draft_timeout() -> float:
+    try:
+        value = float(os.environ.get('COPILOT_DRAFT_TIMEOUT', '4'))
+        if not 0 < value <= 10:
+            raise ValueError('timeout')
+        return value
+    except ValueError:
+        raise DraftFailure('draft_invalid_configuration') from None
 
 
 class DraftProvider(Protocol):
@@ -115,7 +126,13 @@ class ResponsesProvider:
             return texts[0]
         except DraftFailure:
             raise
-        except (TimeoutError, OSError, HTTPError, URLError):
+        except TimeoutError:
+            raise DraftFailure('draft_provider_timeout') from None
+        except URLError as exc:
+            if isinstance(exc.reason, TimeoutError):
+                raise DraftFailure('draft_provider_timeout') from None
+            raise DraftFailure('draft_provider_unavailable') from None
+        except OSError:
             raise DraftFailure('draft_provider_unavailable') from None
         except (ValueError, TypeError, KeyError, AttributeError):
             raise DraftFailure('draft_provider_invalid_envelope') from None
@@ -131,6 +148,6 @@ def configured_provider() -> DraftProvider | None:
         return ResponsesProvider(model=os.environ.get('COPILOT_MODEL', ''),
                                  api_key=os.environ.get('OPENAI_API_KEY', ''),
                                  endpoint=os.environ.get('COPILOT_RESPONSES_URL', 'https://api.openai.com/v1/responses'),
-                                 timeout=float(os.environ.get('COPILOT_DRAFT_TIMEOUT', '4')))
+                                 timeout=draft_timeout())
     except ValueError:
         raise DraftFailure('draft_invalid_configuration') from None
