@@ -72,7 +72,7 @@ def adapt(record: dict, *, repair_kazakh: bool = False) -> Ticket:
     if not isinstance(messages, list) or not messages:
         raise DatasetError("Invalid or missing messages")
     images = record.get("images_count", 0)
-    if type(images) is not int or not 0 <= images <= 100:
+    if type(images) is not int or images < 0:
         raise DatasetError("Invalid images_count")
     incoming, originals = [], []
     removed_admin, dropped, replacements = False, 0, 0
@@ -231,11 +231,17 @@ def split(index: Index, *, seed: int, control_ratio: float) -> dict[str, list[in
     ).digest())
     target = len(index.entries) * control_ratio
     control, dev = [], []
-    for position, members in enumerate(ordered):
-        if not control or (len(control) < target and position < len(ordered) - 1):
+    for members in ordered:
+        if (len(control) + len(members) < len(index.entries)
+                and abs(len(control) + len(members) - target) < abs(len(control) - target)):
             control.extend(members)
         else:
             dev.extend(members)
+    if not control:
+        closest = min(ordered, key=lambda members: abs(len(members) - target))
+        control = list(closest)
+        chosen = set(control)
+        dev = [i for i in dev if i not in chosen]
     if not dev:
         raise DatasetError("Unable to form nonempty dev partition")
     return {"dev": dev, "control": control}
@@ -355,10 +361,18 @@ def label_ids(value, field: str) -> set[str]:
     if isinstance(value, dict):
         ids = list(value)
     elif isinstance(value, list):
-        ids = [item if isinstance(item, str) else item.get("id") if isinstance(item, dict) else None
-               for item in value]
+        ids = []
+        for item in value:
+            if isinstance(item, str):
+                ids.append(item)
+            elif isinstance(item, dict):
+                if "code" in item and "id" in item and item["code"] != item["id"]:
+                    raise DatasetError(f"Conflicting taxonomy {field} code/id")
+                ids.append(item.get("code", item.get("id")))
+            else:
+                ids.append(None)
     else:
-        raise DatasetError(f"Unsupported taxonomy {field}; expected registry mapping or list of IDs/id objects")
+        raise DatasetError(f"Unsupported taxonomy {field}; expected registry mapping or list of IDs/code objects")
     if not ids or any(not isinstance(item, str) or not item for item in ids) or len(ids) != len(set(ids)):
         raise DatasetError(f"Invalid taxonomy {field} IDs")
     return set(ids)

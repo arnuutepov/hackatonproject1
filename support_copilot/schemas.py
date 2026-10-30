@@ -14,7 +14,7 @@ class ContractModel(BaseModel):
 class Message(ContractModel):
     role: Literal["player", "reported_player"]
     text: Text
-    attachments: int = Field(default=0, ge=0, le=100)
+    attachments: int = Field(default=0, ge=0)
 
 
 class TriageRequest(ContractModel):

@@ -63,6 +63,11 @@ def test_admin_outcomes_cannot_change_observable_input():
     assert adapt(raw).duplicate_hash == adapt(other).duplicate_hash
 
 
+def test_attachment_counts_are_not_truncated_by_an_invented_limit():
+    result = adapt(ticket(1) | {"images_count": 145})
+    assert result.request.messages[0].attachments == 145
+
+
 @pytest.mark.parametrize("change", [
     {"images_count": -1}, {"images_count": True}, {"messages": []},
     {"ticket_id": None}, {"kind": "unknown"},
@@ -124,6 +129,15 @@ def test_transitive_groups_never_cross_partitions(tmp_path):
         a = {index.entries[i][field] for i in parts["dev"]}
         b = {index.entries[i][field] for i in parts["control"]}
         assert not a & b
+
+
+def test_giant_group_does_not_swallow_small_requested_control(tmp_path):
+    values = [ticket(i, reporter="large-group" if i < 80 else f"person-{i}") for i in range(100)]
+    index = scan(write_records(tmp_path / "in.jsonl", values))
+    for seed in (1, 42, 99):
+        partitions = split(index, seed=seed, control_ratio=.2)
+        assert len(partitions["control"]) == 20
+        assert set(range(80)) <= set(partitions["dev"])
 
 
 def test_prepare_blind_aligned_and_stable_under_reordering(tmp_path):
@@ -226,6 +240,18 @@ def test_validate_complete_manual_labels(tmp_path):
     expected, taxonomy, labeled = annotation_fixture(tmp_path)
     source = write_records(tmp_path / "labels.jsonl", [labeled])
     assert validate_annotations(source, taxonomy, expected)["validated_records"] == 1
+
+
+def test_organizer_style_taxonomy_uses_code_and_rejects_conflicts(tmp_path):
+    expected, taxonomy, labeled = annotation_fixture(tmp_path)
+    taxonomy.write_text(json.dumps({"categories": [{"code": "sample.insult"}],
+                                    "priorities": [{"code": "p2"}]}))
+    source = write_records(tmp_path / "labels.jsonl", [labeled])
+    assert validate_annotations(source, taxonomy, expected)["validated_records"] == 1
+    taxonomy.write_text(json.dumps({"categories": [{"code": "sample.insult", "id": "different"}],
+                                    "priorities": [{"code": "p2"}]}))
+    with pytest.raises(DatasetError, match="Conflicting"):
+        validate_annotations(source, taxonomy, expected)
 
 
 @pytest.mark.parametrize("change", [

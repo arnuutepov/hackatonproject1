@@ -15,6 +15,7 @@ reports/
 rules.json
 taxonomy.json
 *.zip
+*.tgz
 *.gz
 *.jsonl
 *.jsonl.gz

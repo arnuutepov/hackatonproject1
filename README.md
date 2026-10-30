@@ -3,8 +3,8 @@
 Кейс 03 Grand Mobile × Decentrathon 6.0: ассистент поддержки и разбора жалоб.
 
 **Wave 0 закрыт технически; инструменты Wave 1 готовы.** Работают HTTP, JSONL,
-аудит и подготовка данных. Реальные выгрузки ещё не получены, Wave 1 полностью
-не закрыт — [статус и инструкция](docs/wave-1.md). Классификация,
+аудит и подготовка данных. Реальные выгрузки получены и проверены; ручная
+разметка контрольной выборки ещё не выполнена, Wave 1 полностью не закрыт — [статус и инструкция](docs/wave-1.md). Классификация,
 определение языка, RAG, генерация и дедупликация ещё не реализованы. Все обращения
 получают `needs_human: true`, `confidence: 0`, `category: unclassified`.
 `priority: p2` и `is_spam_or_duplicate: false` — технические значения заглушки, не результат анализа.
@@ -50,13 +50,13 @@ make predict IN=examples/synthetic_tickets.jsonl OUT=outputs/pred.jsonl
 ## Wave 1: локальная подготовка данных
 
 ```bash
-make audit-data IN=data/tickets_train.jsonl.gz OUT=outputs/train-audit.json
-make prepare-data IN=data/tickets_train.jsonl.gz OUT=outputs/wave1-run-01
+make audit-data IN=data/handout-2026-10-27/tickets_train.jsonl.gz OUT=outputs/train-audit.json
+make prepare-data IN=data/handout-2026-10-27/tickets_train.jsonl.gz OUT=outputs/wave1-run-01
 make predict IN=outputs/wave1-run-01/dev.inputs.jsonl OUT=outputs/dev-pred.jsonl
 ```
 
-Нужны настоящие файлы организаторов в `data/`. Ссылка на ТЗ не содержит сами
-выгрузки. Подготовка исключает ответы администратора и последующие реплики,
+Архив организаторов получен отдельно от ТЗ и распакован локально в
+`data/handout-2026-10-27/`. Метки category/priority в нём отсутствуют. Подготовка исключает ответы администратора и последующие реплики,
 разделяет связанные группы по игрокам и точным повторам, создаёт отдельные
 карточки ручной разметки. Всё остаётся в игнорируемых каталогах.
 Нормализация казахских замен включается явно флагом `--repair-kazakh`.
