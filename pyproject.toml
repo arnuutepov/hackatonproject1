@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oguzki-support-copilot"
-version = "0.5.0"
-description = "Grand Mobile Support Copilot — Wave 5 reproducible local evaluation"
+version = "0.6.0"
+description = "Grand Mobile Support Copilot — Wave 6 operator workspace"
 requires-python = ">=3.11"
 dependencies = ["fastapi>=0.115,<1", "pydantic>=2,<3", "uvicorn>=0.30,<1"]
 
@@ -17,6 +17,9 @@ copilot-predict = "support_copilot.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["support_copilot*"]
+
+[tool.setuptools.package-data]
+support_copilot = ["static/*.html", "static/*.css", "static/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
