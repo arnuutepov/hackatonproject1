@@ -1,0 +1,9 @@
+{
+  "version": "wave4-offline-regression-v1",
+  "cases": "30 synthetic adversarial cases, distinct from real dev/control data",
+  "modes": ["template", "valid_plan", "downgrade", "invalid_json", "invented_rule", "wrong_section", "untrusted_prose", "timeout", "failure"],
+  "invariants": ["mandatory human review", "no inspected image evidence", "no established violation", "no unapproved citations", "no prohibited rendered claims", "expected risk flags and topics", "critical priority preserved", "ambiguous language abstention", "complete draft contract"],
+  "additional_tests": ["real byte-trickle HTTP timeout", "bounded provider slots", "late result discarded", "HTTP/CLI fallback equality", "isolated context prevents policy mutation", "source existence versus topic and section relevance", "benign requests are not blanket-escalated"],
+  "sources": "Rules and taxonomy SHA-256 are recorded in the generated local report; frozen dev/control hashes and evaluation definitions are unchanged",
+  "limits": "No live model calls, no independent linguistic review, no production latency or universal semantic guarantee"
+}

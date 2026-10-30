@@ -2,12 +2,13 @@
 import json
 
 from pydantic import ValidationError
-from support_copilot.draft_provider import DraftPlan, DraftProvider, DraftFailure, FAILURE_CODES, configured_provider
+from support_copilot.draft_provider import DraftPlan, DraftProvider, DraftFailure, FAILURE_CODES, configured_provider, draft_timeout
+from support_copilot.deadline import generate_with_deadline
+from support_copilot.safety import CITATION_BLOCKERS
+from support_copilot.citation_policy import STOP, relevant
 from support_copilot.draft_text import TEXT
-from support_copilot.knowledge import Knowledge, tokens
+from support_copilot.knowledge import Knowledge
 from support_copilot.schemas import DraftReply, TriageRequest, TriageResponse
-
-STOP = {'правил', 'игрок', 'игрока', 'игроки', 'пункт', 'номер', 'можно', 'какой', 'такой', 'пожал', 'меня', 'этого', 'этот', 'того', 'игрово'}
 
 
 def topic_for(result: TriageResponse) -> str:
@@ -41,22 +42,25 @@ def build_context(request: TriageRequest, result: TriageResponse, knowledge: Kno
     truncated = len(selected) != len(player) or any(len(text) > 1000 for _, text in selected)
     messages = [{'id': key, 'text': text[:1000]} for key, text in selected]
     rules = []
-    for candidate in result.retrieved_rules:
+    candidates = [] if set(result.safety_flags) & CITATION_BLOCKERS else result.retrieved_rules
+    for candidate in candidates:
         rule = knowledge.rules.get(candidate.source_id)
         # Unnumbered sections and weak title-only matches are not citations.
         if not rule or not rule.ref or candidate.text != rule.text:
             continue
-        query_words = set(tokens(' '.join(item['text'] for item in messages))) - STOP
-        if not query_words & (set(tokens(rule.text)) - STOP):
+        query = ' '.join(item['text'] for item in messages)
+        if not relevant(result.category, result.detected_topics, query, rule):
             continue
         rules.append({'source_id': rule.source_id, 'section': rule.section, 'text': rule.text[:2000]})
         if len(rules) == 3:
             break
     topic = topic_for(result)
     return dict(lang=result.lang, kind=request.kind, category=result.category, topic=topic,
+                detected_topics=result.detected_topics,
                 needs_human_minimum=result.needs_human or truncated,
                 messages=messages, rules=rules, attachments_available=False,
                 attachments_reported=bool(result.extracted.attachments_claimed),
+                safety_flags=result.safety_flags,
                 allowed_questions=allowed_questions(result, topic)), truncated
 
 
@@ -92,11 +96,15 @@ def validate_plan(raw: str, context: dict, knowledge: Knowledge) -> DraftPlan:
     if context['lang'] == 'und' and 'preferred_language' not in plan.questions:
         raise DraftFailure('draft_missing_clarification')
     if plan.claim:
+        if 'contradictory_messages' in context.get('safety_flags', []):
+            raise DraftFailure('draft_claim_blocked_by_safety')
         messages = {item['id']: item['text'] for item in context['messages']}
         if not 3 <= len(plan.claim.quote.strip()) <= 500 or plan.claim.quote not in messages.get(plan.claim.message_id, ''):
             raise DraftFailure('draft_ungrounded_claim')
     if len(plan.citations) > 2 or len({item.source_id for item in plan.citations}) != len(plan.citations):
         raise DraftFailure('draft_invalid_citation')
+    if plan.citations and set(context.get('safety_flags', [])) & CITATION_BLOCKERS:
+        raise DraftFailure('draft_citation_blocked_by_safety')
     sources = {item['source_id']: item['text'] for item in context['rules']}
     for citation in plan.citations:
         rule = knowledge.rules.get(citation.source_id)
@@ -105,8 +113,8 @@ def validate_plan(raw: str, context: dict, knowledge: Knowledge) -> DraftPlan:
         if not 20 <= len(citation.quote.strip()) <= 600 or citation.quote not in sources[citation.source_id] or citation.quote not in rule.text:
             raise DraftFailure('draft_invalid_citation')
         # Demand actual topic-bearing overlap in the selected quote, not mere existence.
-        words = set(tokens(' '.join(item['text'] for item in context['messages']))) - STOP
-        if not words & (set(tokens(citation.quote)) - STOP):
+        query = ' '.join(item['text'] for item in context['messages'])
+        if not relevant(context['category'], context.get('detected_topics', []), query, rule, citation.quote):
             raise DraftFailure('draft_irrelevant_citation')
     if plan.action == 'rule_review' and not plan.citations:
         raise DraftFailure('draft_missing_citation')
@@ -118,6 +126,10 @@ def render(plan: DraftPlan, result: TriageResponse, topic: str, *, provenance: s
     paragraphs = [text['hello'], text[topic], text[plan.action]]
     if result.extracted.attachments_claimed:
         paragraphs.append(text['attachments'])
+    if 'contradictory_messages' in result.safety_flags or 'conflicting_observable_fields' in result.safety_flags:
+        paragraphs.append(text.get('contradiction', ''))
+    if 'mixed_sensitive_topics' in result.safety_flags:
+        paragraphs.append(text.get('mixed_topics', ''))
     cited = [item.source_id for item in plan.citations]
     if cited:
         paragraphs.append(text['rules'].format(ids=', '.join(cited)))
@@ -149,7 +161,8 @@ def add_draft(request: TriageRequest, result: TriageResponse, knowledge: Knowled
         if reason not in {'draft_language_not_supported', 'draft_language_unknown'}:
             selected = provider if provider is not None else (configured_provider() if use_configured_provider else None)
         if selected is not None:
-            plan = validate_plan(selected.generate(context), context, knowledge)
+            raw = generate_with_deadline(selected, context, draft_timeout())
+            plan = validate_plan(raw, context, knowledge)
             result.draft_reply = render(plan, result, topic_for(result), provenance='validated_model_plan')
             result.needs_human = result.needs_human or plan.needs_human
             result.draft_available = True

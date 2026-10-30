@@ -52,7 +52,7 @@ def evaluate() -> dict:
         retrieval.append(dict(query=case['query'], expected=case['relevant'], returned=[r['source_id'] for r in results],
                               hit_at_5=bool(hits), precision_at_5=hits/5,
                               source_integrity=all(r['text'] == k.rules[r['source_id']].text for r in results)))
-    return dict(protocol='wave2-baseline-v1', dataset='human-dev-approved', n=n,
+    return dict(protocol='wave2-baseline-v1', implementation='wave4_safety_layer', dataset='human-dev-approved', n=n,
         taxonomy_hashes=k.hashes, category_accuracy=accuracy('category'), category_by_class=classes,
         priority_by_class=priority, priority_macro_f1_all=sum(v['f1'] for v in priority.values())/4,
         priority_macro_f1_present=sum(v['f1'] for v in priority.values() if v['support'])/sum(bool(v['support']) for v in priority.values()),

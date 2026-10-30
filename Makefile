@@ -19,6 +19,9 @@ test:
 eval-drafts:
 	$(PYTHON) -m support_copilot.evaluate_drafts --output outputs/wave-3/synthetic-safety.json
 
+eval-regressions:
+	$(PYTHON) -m support_copilot.evaluate_regressions --output outputs/wave-4/regressions.json
+
 audit-data:
 	@test -n "$(IN)" -a -n "$(OUT)" || (echo 'Usage: make audit-data IN=data/tickets_train.jsonl.gz OUT=outputs/audit.json' >&2; exit 2)
 	$(PYTHON) -m support_copilot.dataset audit --input "$(IN)" --output "$(OUT)"

@@ -6,7 +6,7 @@ from support_copilot.schemas import TriageRequest, TriageResponse
 from support_copilot.service import triage
 from support_copilot.knowledge import get_knowledge
 
-app = FastAPI(title="Oguzki Support Copilot", version="0.3.0")
+app = FastAPI(title="Oguzki Support Copilot", version="0.4.0")
 
 
 @app.exception_handler(OSError)
@@ -26,7 +26,7 @@ async def invalid_request(request: Request, exc: RequestValidationError) -> JSON
 @app.get("/health")
 def health() -> dict[str, str]:
     knowledge = get_knowledge()
-    return {"status": "ok", "mode": "wave_3_guarded_drafts",
+    return {"status": "ok", "mode": "wave_4_safety_regressions",
             "taxonomy_version": knowledge.taxonomy['version'], **knowledge.hashes}
 
 
