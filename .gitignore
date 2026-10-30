@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.env
+.env.*
+!.env.example
+data/
+outputs/
+artifacts/
+*.jsonl
+*.jsonl.gz
+*.csv
+*.parquet
+*.arb
+!examples/synthetic_tickets.jsonl
