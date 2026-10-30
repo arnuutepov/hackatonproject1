@@ -29,7 +29,7 @@ def run(text, kind='report', **fields):
 def test_topics(text, kind, category, priority):
     result = run(text, kind)
     assert (result.category, result.priority) == (category, priority)
-    assert not result.draft_available
+    assert result.draft_available
 
 
 @pytest.mark.parametrize('text', [

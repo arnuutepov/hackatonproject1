@@ -45,10 +45,20 @@ class ReferenceResolution(ContractModel):
     candidates: list[str]
 
 
+class DraftAllegation(ContractModel):
+    message_id: str
+    quote: str
+    status: Literal['reported_by_player']
+
+
 class DraftReply(ContractModel):
     lang: Language
     text: str
     cited: list[str] = Field(default_factory=list)
+    action: Literal['clarify', 'human_review', 'rule_review'] = 'clarify'
+    provenance: Literal['safe_template', 'validated_model_plan'] = 'safe_template'
+    player_claim: DraftAllegation | None = None
+    established_facts: list[str] = Field(default_factory=list)
 
 
 class TriageResponse(ContractModel):

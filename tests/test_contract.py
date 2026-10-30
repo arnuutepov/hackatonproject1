@@ -26,7 +26,8 @@ def test_http_and_batch_match_shared_service(tmp_path):
 def test_baseline_does_not_claim_to_inspect_attachments_or_generate():
     result = client.post("/triage", json=PAYLOAD).json()
     assert result["needs_human"] is True
-    assert result["draft_available"] is False
+    assert result["draft_available"] is True
+    assert result['draft_reply']['provenance'] == 'safe_template'
     assert result["extracted"]["has_evidence"] is False
     assert result["draft_reply"]["cited"] == []
 
@@ -66,4 +67,4 @@ def test_input_cannot_be_overwritten(tmp_path):
 
 
 def test_health_identifies_baseline():
-    assert client.get("/health").json()['mode'] == 'wave_2_lexical_baseline'
+    assert client.get("/health").json()['mode'] == 'wave_3_guarded_drafts'

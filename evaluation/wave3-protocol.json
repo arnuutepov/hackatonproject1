@@ -1,0 +1,9 @@
+{
+  "version": "wave3-offline-synthetic-v1",
+  "purpose": "Acceptance checks for grounded drafts, distinct from real human or assistant-labelled control data",
+  "cases": "19 synthetic cases: RU 8, KK 5, UZ 5, und 1",
+  "modes": ["template", "valid_plan_replay", "invalid_json", "invented_rule", "punishment_promise", "screenshot_claim", "timeout"],
+  "checks": ["valid contract", "expected language", "existing rule IDs", "no unsupported promise phrases", "no established player violation", "required escalation", "nonempty draft", "expected model-plan or safe-template provenance"],
+  "unit_tests": "Separate checks require every quoted citation to exist in both the sent sources and the local knowledge index, exact allegation provenance, no escalation downgrade, no secret echo, provider wire schema and localhost HTTP/CLI integration",
+  "quality_limit": "No external model calls or independent human linguistic evaluation; this does not establish live-model answer quality"
+}
