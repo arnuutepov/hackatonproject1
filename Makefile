@@ -1,6 +1,6 @@
 PYTHON ?= .venv/bin/python
 
-.PHONY: install serve predict test audit-data prepare-data
+.PHONY: install serve predict test eval-drafts eval-regressions measure benchmark submission-check audit-repo check audit-data prepare-data
 install:
 	python3 -m venv .venv
 	.venv/bin/python -m pip install -r requirements-dev.lock
@@ -27,6 +27,16 @@ measure:
 
 benchmark:
 	$(PYTHON) -m support_copilot.benchmark --output outputs/wave-5/http-latency.json
+
+submission-check:
+	$(PYTHON) -m support_copilot.submission_check --output outputs/wave-7
+
+audit-repo:
+	git fetch --quiet --all
+	$(PYTHON) -m support_copilot.repo_audit
+
+# Full offline acceptance before submission: tests, safety matrices, HTTP/CLI/demo, Git hygiene.
+check: test eval-regressions eval-drafts submission-check audit-repo
 
 audit-data:
 	@test -n "$(IN)" -a -n "$(OUT)" || (echo 'Usage: make audit-data IN=data/tickets_train.jsonl.gz OUT=outputs/audit.json' >&2; exit 2)
