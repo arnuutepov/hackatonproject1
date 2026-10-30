@@ -37,7 +37,7 @@ def predict(source: Path, destination: Path) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Wave 2: predict from inference-contract JSONL")
+    parser = argparse.ArgumentParser(description="Wave 3: triage and guarded drafts from inference-contract JSONL")
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()

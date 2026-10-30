@@ -1,4 +1,4 @@
-"""Wave 2 deterministic lexical baseline. No generation or personal decisions."""
+"""Shared inference entry point: Wave 2 analysis plus guarded Wave 3 drafts."""
 import re
 from support_copilot.knowledge import get_knowledge, normalize
 from support_copilot.schemas import DraftReply, Extracted, TriageRequest, TriageResponse
@@ -41,7 +41,7 @@ def language(text: str) -> tuple[str, str | None]:
     return 'und', 'language_unknown_or_mixed'
 
 
-def triage(request: TriageRequest) -> TriageResponse:
+def analyze(request: TriageRequest) -> TriageResponse:
     knowledge = get_knowledge()
     # Reported player's quotes do not establish the reporter's intent.
     text = '\n'.join(message.text for message in request.messages if message.role == 'player')
@@ -126,3 +126,11 @@ def triage(request: TriageRequest) -> TriageResponse:
         confidence=certainty if not incomplete else min(certainty, .25), reasons=reasons,
         retrieved_rules=knowledge.search(text), reference_resolutions=resolutions,
     )
+
+
+def triage(request: TriageRequest, *, draft_provider=None, use_configured_provider: bool = True) -> TriageResponse:
+    from support_copilot.drafting import add_draft
+    result = analyze(request)
+    result.reasons.remove('draft_generator_not_connected')
+    return add_draft(request, result, get_knowledge(), provider=draft_provider,
+                     use_configured_provider=use_configured_provider)

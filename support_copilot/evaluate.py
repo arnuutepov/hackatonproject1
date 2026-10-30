@@ -8,7 +8,7 @@ import time
 
 from support_copilot.knowledge import get_knowledge
 from support_copilot.schemas import TriageRequest
-from support_copilot.service import triage
+from support_copilot.service import analyze
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -25,7 +25,8 @@ def evaluate() -> dict:
     for row in rows:
         request = TriageRequest.model_validate(row['request'])
         start = time.perf_counter()
-        predictions.append(triage(request))
+        # Frozen Wave 2 evaluation never calls a model, even if configured.
+        predictions.append(analyze(request))
         times.append((time.perf_counter() - start) * 1000)
     n = len(rows)
     def accuracy(field):

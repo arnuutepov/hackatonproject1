@@ -23,5 +23,6 @@ taxonomy.json
 *.parquet
 *.arb
 !examples/synthetic_tickets.jsonl
+!examples/wave3_synthetic.jsonl
 .install-temp/
 .test-temp/
