@@ -10,7 +10,7 @@ TOPICS = {
     'payment': r'донат|плат[её]ж|оплат|списал|пополнени|payment|paid|donat|to[ʻ’\x27]?lov|төлем',
     'account': r'взлом|аккаунт|акк\b|доступ|парол|не могу войти|пропал[^\n]{0,80}(?:машин|имущество)|hacked|account|akkaunt|password|login',
     'admin': r'админ|обжал|апелляц|разбан|не согласен|незаконн|\bбан(?:а|у|ом|е|ы|ить|ил[аи]?|ят|ен|или)?\b|забан|\bмут(?:а|ом|е|ы|ить|ил[аи]?|ят)?\b|наказан|unban|appeal|admin|ban berd',
-    'cheat': r'\bчит|\bаим|\baimbot|\bcheat|летает|сквозь стен|через стен',
+    'cheat': r'\bчит|\bаим|\baimbot|\bcheat|(?<!вы)летает|сквозь стен|через стен',
     'scam': r'обман|мошенн|скам|украл|scam|aldadi|алдап',
     'rmt_ads': r'реклам|реал(?:ьные|ьных)? день|прода[её]т[^\n]{0,80}акк|rmt|reklama',
     'insult': r'оск|оскорб|обзыв|матер|токсич|расизм|insult|so[ʻ’\x27]?k|haqorat|балағат',
@@ -18,6 +18,8 @@ TOPICS = {
     'help': r'застр|баг|текстур|вылет|лагает|телепорт|stuck|bug|qotib|тұрып қал',
     'question': r'\bкак\b|\bгде\b|\bможно\b|\bсколько\b|\bзачем\b|\bhow\b|\bwhere\b|qanday|qayer|қалай|қайда|каким',
 }
+# Russian case forms: «на сервере 4», «с сервера 12».
+SERVER = re.compile(r'(?:сервер(?:а|е|у|ом)?|server)\s*(?:№|#|:)?\s*(\d{1,3})\b', re.I)
 PATTERNS = {key: re.compile(value, re.I) for key, value in TOPICS.items()}
 
 
@@ -118,7 +120,7 @@ def analyze(request: TriageRequest) -> TriageResponse:
     if attachments:
         reasons.append('attachments_reported_not_inspected')
     nickname = re.search(r'\b[A-Za-z][A-Za-z0-9]{1,24}_[A-Za-z][A-Za-z0-9_]{1,24}\b', text)
-    server = re.search(r'(?:сервер|server)\s*(?:№|#|:)?\s*(\d{1,3})\b', text, re.I)
+    server = re.search(SERVER, text)
     notices = {
         'ru': 'Автоматический черновик пока недоступен.',
         'kk': 'Автоматты жауап жобасы әзірге қолжетімсіз.',

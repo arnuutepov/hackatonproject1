@@ -32,11 +32,13 @@ FORBIDDEN = re.compile(r'накажем|наказан[аоы]? будет|ве�
 
 # What a reviewer should see in each demo scenario, in examples/wave7_demo.jsonl order.
 DEMO_CASES = [
-    ('simple_question', 'Простой вопрос: без эскалации, низкий приоритет', lambda r: {
+    # No verified FAQ source exists, so the draft honestly hands the question to staff (Wave 3 policy).
+    ('simple_question', 'Простой вопрос: p3, без выдуманного ответа — передача сотруднику', lambda r: {
         'lang_ru': r['lang'] == 'ru',
         'category_question': r['category'] == 'report.question',
         'priority_p3': r['priority'] == 'p3',
-        'no_human_needed': r['needs_human'] is False,
+        'no_safety_flags': r['safety_flags'] == [],
+        'no_invented_answer': 'draft_answer_sources_insufficient' in r['reasons'] and r['draft_reply']['cited'] == [],
     }),
     ('complaint', 'Жалоба с вложением: человек, вложения не просмотрены', lambda r: {
         'complaint_category': r['category'].startswith('complaint.'),
