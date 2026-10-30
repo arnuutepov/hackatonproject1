@@ -15,6 +15,9 @@ SECRET = (r'sk-(proj-)?[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-
           r'AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY|'
           r'OPENAI_API_KEY *= *[^ \n$]+')
 LARGE_BLOB = 500_000
+# Exact synthetic canary once used by submission_check to test that 422 does not echo input.
+# It is not a credential; only this literal is exempt, nothing pattern-based.
+KNOWN_SYNTHETIC = ('sk-demo-should-not-echo',)
 
 
 def git(*args: str) -> str:
@@ -37,7 +40,8 @@ def main() -> int:
     for commit in commits:
         found = subprocess.run(['git', 'grep', '-I', '-n', '-E', SECRET, commit, '--', '.'],
                                capture_output=True, text=True).stdout
-        findings += [f'secret-like text: {hit[:120]}' for hit in found.splitlines()]
+        findings += [f'secret-like text: {hit[:120]}' for hit in found.splitlines()
+                     if not any(token in hit for token in KNOWN_SYNTHETIC)]
     tracked = git('ls-files').splitlines()
     findings += [f'tracked data-like file: {path}' for path in tracked
                  if (DATA_PATH.search(path) or path.endswith('.jsonl')) and path not in ALLOWED]

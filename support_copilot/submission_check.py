@@ -186,7 +186,7 @@ def check(inputs: list[Path], passes: int) -> dict:
                                       for item in entry['invariant_failures'])
             report['files'].append(entry)
         # Contract errors must be JSON 422 that does not echo the request.
-        secret = 'sk-demo-should-not-echo'
+        secret = 'canary-input-must-not-echo'
         status, body, _ = post(base, '/triage', json.dumps({'kind': 'report', 'messages': [], 'x': secret}).encode())
         report['invalid_request'] = dict(status=status, echoes_input=secret in json.dumps(body))
         if status != 422 or secret in json.dumps(body):

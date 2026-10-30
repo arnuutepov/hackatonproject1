@@ -66,7 +66,7 @@
 | Инварианты на 15 новых обращениях: язык черновика, существующие цитаты, нет обещаний и установленных нарушений, `has_evidence=false`, 0 вызовов API, $0 | 15/15 |
 | Демо-сценарии | **5/5** |
 | pytest без FastAPI: `test_wave7`, `test_dataset`, `test_wave5` | **73 прошли** |
-| `make audit-repo` | Чисто: 23 коммита, все ветки и PR |
+| `make audit-repo` | Чисто: все ветки и PR, 26 коммитов вместе с Wave 7. Единственное исключение — синтетический маркер `sk-demo-should-not-echo` из первой версии проверки 422; он явно указан в `repo_audit.py` |
 
 **Не выполнено в среде агента:** чистый `make install`, тесты с FastAPI TestClient
 (`test_contract`, `test_wave2/3/4/6`, `test_admin_workflow`, `test_local_chat`),
