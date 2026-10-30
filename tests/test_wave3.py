@@ -14,7 +14,7 @@ from support_copilot.cli import predict
 from support_copilot.draft_provider import DraftFailure, DraftPlan, ResponsesProvider, configured_provider
 from support_copilot.drafting import build_context, validate_plan, render
 from support_copilot.draft_text import TEXT
-from support_copilot.knowledge import get_knowledge, tokens
+from support_copilot.knowledge import get_knowledge
 from support_copilot.schemas import TriageRequest, TriageResponse
 from support_copilot.service import analyze, triage
 
@@ -88,12 +88,7 @@ def test_grounded_citation_and_claim_with_exact_provenance():
 
 def test_existing_but_irrelevant_quote_is_not_accepted():
     def irrelevant(plan, context):
-        from support_copilot.drafting import STOP
-        source = next(item for item in context['rules'] if item['source_id'] == '30:2.1')
-        words = set(tokens(context['messages'][0]['text'])) - STOP
-        quote = next(part for part in source['text'].split(' | ')
-                     if 20 <= len(part) <= 600 and not words & (set(tokens(part)) - STOP))
-        plan['citations'] = [{'source_id': source['source_id'], 'quote': quote}]
+        plan['citations'] = [{'source_id': '30:2.1', 'quote': 'Упоминание родных: MUTE - от 90 до 180 минут.'}]
     result = triage(request(), draft_provider=FakeModel(edit=irrelevant))
     assert 'draft_irrelevant_citation' in result.reasons
     assert result.draft_reply.cited == []
