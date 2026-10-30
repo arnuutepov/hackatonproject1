@@ -2,7 +2,9 @@
 
 Кейс 03 Grand Mobile × Decentrathon 6.0: ассистент поддержки и разбора жалоб.
 
-**Wave 0: каркас и контракт.** Работают HTTP, JSONL и проверки формата. Классификация,
+**Wave 0 закрыт технически; инструменты Wave 1 готовы.** Работают HTTP, JSONL,
+аудит и подготовка данных. Реальные выгрузки ещё не получены, Wave 1 полностью
+не закрыт — [статус и инструкция](docs/wave-1.md). Классификация,
 определение языка, RAG, генерация и дедупликация ещё не реализованы. Все обращения
 получают `needs_human: true`, `confidence: 0`, `category: unclassified`.
 `priority: p2` и `is_spam_or_duplicate: false` — технические значения заглушки, не результат анализа.
@@ -41,9 +43,25 @@ make predict IN=examples/synthetic_tickets.jsonl OUT=outputs/pred.jsonl
 ненулевым кодом, указывает номер строки и сохраняет предыдущий выходной файл.
 Успешный запуск заменяет указанный OUT целиком. Вход и выход не могут совпадать.
 
-Полные training/validation-записи пока не принимаются: для них в Wave 1 нужен
-адаптер. Ответы `admin`, `verdict`, `punishment`, `violation` нельзя передавать
+Полные training/validation-записи не принимаются непосредственно `make predict`:
+используйте адаптер Wave 1 ниже. Ответы `admin`, `verdict`, `punishment`, `violation` нельзя передавать
 модели как признаки нового обращения. Дополнительные поля отклоняются.
+
+## Wave 1: локальная подготовка данных
+
+```bash
+make audit-data IN=data/tickets_train.jsonl.gz OUT=outputs/train-audit.json
+make prepare-data IN=data/tickets_train.jsonl.gz OUT=outputs/wave1-run-01
+make predict IN=outputs/wave1-run-01/dev.inputs.jsonl OUT=outputs/dev-pred.jsonl
+```
+
+Нужны настоящие файлы организаторов в `data/`. Ссылка на ТЗ не содержит сами
+выгрузки. Подготовка исключает ответы администратора и последующие реплики,
+разделяет связанные группы по игрокам и точным повторам, создаёт отдельные
+карточки ручной разметки. Всё остаётся в игнорируемых каталогах.
+Нормализация казахских замен включается явно флагом `--repair-kazakh`.
+Проверка пересечений, формат таксономии, разметка и ограничения описаны в
+[инструкции Wave 1](docs/wave-1.md).
 
 ## Структура
 
@@ -53,6 +71,8 @@ support_copilot/
   service.py    # единое ядро, пока явная заглушка
   api.py        # FastAPI: /health и /triage
   cli.py        # JSONL через то же ядро
+  dataset.py    # audit / prepare / compare / validate-annotations
+  normalization.py  # оригинал + NFC, необязательные контекстные замены KK
 tests/          # контракт, ошибки, отсутствие утечки меток, одинаковый HTTP/CLI
 examples/       # только вымышленные обращения
 docs/requirements.md  # требования, этапы и неясности ТЗ

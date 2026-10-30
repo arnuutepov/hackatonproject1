@@ -9,6 +9,13 @@ __pycache__/
 data/
 outputs/
 artifacts/
+datasets/
+raw/
+reports/
+rules.json
+taxonomy.json
+*.zip
+*.gz
 *.jsonl
 *.jsonl.gz
 *.csv
