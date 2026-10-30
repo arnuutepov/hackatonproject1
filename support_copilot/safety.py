@@ -94,7 +94,7 @@ def assess(request: TriageRequest) -> SafetyAssessment:
         (r'\bоплатил\b|\bзаплатил\b', r'не платил|не оплачивал')]:
         if re.search(positive, joined) and re.search(negative, joined):
             flags.add('contradictory_messages')
-    servers = re.findall(r'(?:сервер|server)\s*(?:№|#|:)?\s*(\d{1,3})\b', text)
+    servers = re.findall(r'(?:сервер(?:а|е|у|ом)?|server)\s*(?:№|#|:)?\s*(\d{1,3})\b', text)
     if len(set(servers)) > 1:
         flags.add('conflicting_observable_fields')
     raw = '\n'.join(message.text for message in request.messages if message.role == 'player').casefold()

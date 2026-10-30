@@ -10,7 +10,7 @@ from support_copilot.service import triage
 from support_copilot.knowledge import get_knowledge
 from support_copilot.operator import install_handlers, local_access, router as operator_router
 
-app = FastAPI(title="Oguzki Support Copilot", version="0.6.0")
+app = FastAPI(title="Oguzki Support Copilot", version="0.7.0")
 STATIC = Path(__file__).with_name('static')
 app.include_router(operator_router)
 install_handlers(app)

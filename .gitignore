@@ -30,6 +30,8 @@ taxonomy.json
 *.arb
 !examples/synthetic_tickets.jsonl
 !examples/wave3_synthetic.jsonl
+!examples/wave7_demo.jsonl
+!examples/wave7_new.jsonl
 .install-temp/
 .test-temp/
 .test-temp-*/
