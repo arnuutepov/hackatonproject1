@@ -1,0 +1,12 @@
+{
+  "version": "wave2-baseline-v1",
+  "evaluation": "dev only, 100 human labels with recorded user-approved corrections",
+  "control": "not evaluated or used for tuning; assistant labels are not blind human truth",
+  "category": "accuracy, per-class support and confusion counts",
+  "priority": "macro-F1 on all four taxonomy priorities; also present-label macro-F1; show absent classes",
+  "language": "accuracy within current contract; uk remains und with explicit reason",
+  "escalation": "false negatives versus dev labels, separate synthetic mandatory scenarios",
+  "retrieval": "separate synthetic queries with fixed relevant source IDs; precision@5 and hit@5; source integrity is not relevance",
+  "limitations": "dev is small and deliberately sampled; no production, blind-control or population claim; confidence is uncalibrated",
+  "data": "see frozen-inputs.json; refuse evaluation on hash change"
+}

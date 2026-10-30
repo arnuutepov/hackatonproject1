@@ -27,6 +27,22 @@ class Extracted(ContractModel):
     rule_refs: list[str] = Field(default_factory=list)
     has_evidence: bool = False
     server: str | None = None
+    attachments_claimed: int = 0
+
+
+class RetrievedRule(ContractModel):
+    source_id: str
+    section_id: str
+    section: str
+    ref: str | None
+    text: str
+    score: float
+
+
+class ReferenceResolution(ContractModel):
+    reference: str
+    status: Literal['resolved', 'ambiguous', 'missing']
+    candidates: list[str]
 
 
 class DraftReply(ContractModel):
@@ -45,3 +61,7 @@ class TriageResponse(ContractModel):
     needs_human: bool
     confidence: float = Field(ge=0, le=1)
     reasons: list[str]
+    retrieved_rules: list[RetrievedRule] = Field(default_factory=list)
+    reference_resolutions: list[ReferenceResolution] = Field(default_factory=list)
+    draft_available: bool = False
+    confidence_method: str = 'lexical_heuristic_uncalibrated'

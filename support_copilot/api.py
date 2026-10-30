@@ -4,8 +4,15 @@ from fastapi.responses import JSONResponse
 
 from support_copilot.schemas import TriageRequest, TriageResponse
 from support_copilot.service import triage
+from support_copilot.knowledge import get_knowledge
 
-app = FastAPI(title="Oguzki Support Copilot", version="0.1.0")
+app = FastAPI(title="Oguzki Support Copilot", version="0.2.0")
+
+
+@app.exception_handler(OSError)
+@app.exception_handler(ValueError)
+async def unavailable(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(status_code=503, content={'detail': 'Knowledge source unavailable or invalid'})
 
 
 @app.exception_handler(RequestValidationError)
@@ -18,7 +25,9 @@ async def invalid_request(request: Request, exc: RequestValidationError) -> JSON
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "mode": "wave_0_stub"}
+    knowledge = get_knowledge()
+    return {"status": "ok", "mode": "wave_2_lexical_baseline",
+            "taxonomy_version": knowledge.taxonomy['version'], **knowledge.hashes}
 
 
 @app.post("/triage", response_model=TriageResponse)

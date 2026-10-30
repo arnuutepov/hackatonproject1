@@ -1,0 +1,18 @@
+[
+  {
+    "path": "data/handout-2026-10-27/rules.json",
+    "sha256": "80cd4f920f36283214fad3a748314f51560d1e1c5ee62a00d9214b9c22353be4"
+  },
+  {
+    "path": "data/handout-2026-10-27/taxonomy.json",
+    "sha256": "bf95c831551831a5b7e7fe36978b83b049d6b8c856cb4c7e105e36f625cddc4c"
+  },
+  {
+    "path": "outputs/handout-2026-10-27/returned-dev-v2/dev.approved.jsonl",
+    "sha256": "40ca35a9d94e9cb0beeac2ea1bcccbe226e6d19a960776543f21f1675248b4d4"
+  },
+  {
+    "path": "outputs/handout-2026-10-27/control-assistant/control.assistant.jsonl",
+    "sha256": "64dec39d79b6ed45764d0ce459d217cdc0b63eae741d416ad9c003134b31faaf"
+  }
+]

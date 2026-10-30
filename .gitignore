@@ -23,3 +23,5 @@ taxonomy.json
 *.parquet
 *.arb
 !examples/synthetic_tickets.jsonl
+.install-temp/
+.test-temp/
