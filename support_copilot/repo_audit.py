@@ -24,6 +24,11 @@ def git(*args: str) -> str:
     return subprocess.run(['git', *args], check=True, capture_output=True, text=True).stdout
 
 
+def has_secret(text: str) -> bool:
+    """Exempt only the matched canary, never the rest of its line."""
+    return any(match.group(0) not in KNOWN_SYNTHETIC for match in re.finditer(SECRET, text))
+
+
 def main() -> int:
     commits = git('rev-list', '--all').split()
     findings = []
@@ -38,10 +43,13 @@ def main() -> int:
             if size > LARGE_BLOB:
                 findings.append(f'large blob {size} bytes: {parts[1]}')
     for commit in commits:
-        found = subprocess.run(['git', 'grep', '-I', '-n', '-E', SECRET, commit, '--', '.'],
-                               capture_output=True, text=True).stdout
-        findings += [f'secret-like text: {hit[:120]}' for hit in found.splitlines()
-                     if not any(token in hit for token in KNOWN_SYNTHETIC)]
+        result = subprocess.run(['git', 'grep', '-I', '-n', '-E', SECRET, commit, '--', '.'],
+                                capture_output=True, text=True)
+        if result.returncode not in (0, 1):
+            raise RuntimeError(f'git grep failed for {commit}; audit incomplete')
+        # Report locations only: a detected credential must not leak into logs.
+        findings += ['secret-like text: ' + ':'.join(hit.split(':', 3)[:3])
+                     for hit in result.stdout.splitlines() if has_secret(hit)]
     tracked = git('ls-files').splitlines()
     findings += [f'tracked data-like file: {path}' for path in tracked
                  if (DATA_PATH.search(path) or path.endswith('.jsonl')) and path not in ALLOWED]
