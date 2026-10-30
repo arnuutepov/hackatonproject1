@@ -20,6 +20,10 @@ class AnalysisRequired(Exception):
     pass
 
 
+class HumanReviewRequired(Exception):
+    pass
+
+
 def timestamp() -> str:
     return datetime.now(timezone.utc).isoformat(timespec='microseconds')
 
@@ -48,6 +52,17 @@ class OperatorStore:
                 ticket_id TEXT NOT NULL REFERENCES tickets(id),
                 kind TEXT NOT NULL, at TEXT NOT NULL, revision INTEGER NOT NULL,
                 detail TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS assignments (
+                ticket_id TEXT PRIMARY KEY REFERENCES tickets(id),
+                operator TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_id TEXT NOT NULL REFERENCES tickets(id),
+                role TEXT NOT NULL CHECK(role IN ('player', 'admin')),
+                text TEXT NOT NULL,
+                created_at TEXT NOT NULL
             );
         ''')
         try:
@@ -100,7 +115,9 @@ class OperatorStore:
 
     def list(self) -> list[dict]:
         with self.connect() as connection:
-            rows = connection.execute('SELECT * FROM tickets ORDER BY created_at DESC, id DESC').fetchall()
+            rows = connection.execute('SELECT tickets.*, assignments.operator AS assigned_to FROM tickets '
+                                      'LEFT JOIN assignments ON tickets.id = assignments.ticket_id '
+                                      'ORDER BY created_at DESC, id DESC').fetchall()
         summaries = []
         for row in rows:
             analysis = json.loads(row['analysis']) if row['analysis'] else None
@@ -114,6 +131,8 @@ class OperatorStore:
                 'priority': analysis['priority'] if analysis else None,
                 'category': analysis['category'] if analysis else None,
                 'needs_human': (analysis['needs_human'] or row['status'] == 'escalated') if analysis else None,
+                'assigned_to': row['assigned_to'],
+                'mentioned_nickname': analysis['extracted']['nickname'] if analysis else None,
             })
         return summaries
 
@@ -122,13 +141,59 @@ class OperatorStore:
             row = self._ticket(connection, ticket_id)
             events = connection.execute('SELECT kind, at, revision, detail FROM events '
                                         'WHERE ticket_id = ? ORDER BY id', (ticket_id,)).fetchall()
+            assignment = connection.execute('SELECT operator FROM assignments WHERE ticket_id = ?', (ticket_id,)).fetchone()
+            chat = connection.execute('SELECT id, role, text, created_at FROM chat_messages WHERE ticket_id = ? ORDER BY id', (ticket_id,)).fetchall()
         result = dict(row)
+        result['chat_messages'] = [dict(message) for message in chat]
+        result['assigned_to'] = assignment['operator'] if assignment else None
         for field in ('payload', 'analysis', 'knowledge_hashes'):
             result[field] = json.loads(result[field]) if result[field] else None
         result['events'] = [{**dict(event), 'detail': json.loads(event['detail'])} for event in events]
         result['needs_human'] = bool(result['analysis'] and (
             result['analysis']['needs_human'] or result['status'] == 'escalated'))
         return result
+
+    def add_chat_message(self, ticket_id: str, expected_revision: int, role: str, text: str) -> None:
+        with self.connect() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            row = self._ticket(connection, ticket_id)
+            self._revision(row, expected_revision)
+            now = timestamp()
+            connection.execute('INSERT INTO chat_messages (ticket_id, role, text, created_at) VALUES (?, ?, ?, ?)',
+                               (ticket_id, role, text, now))
+            revision = expected_revision + 1
+            connection.execute('UPDATE tickets SET revision = ?, updated_at = ? WHERE id = ?',
+                               (revision, now, ticket_id))
+            self._event(connection, ticket_id, 'chat_message', revision, {'role': role})
+
+    def workflow(self, ticket_id: str, expected_revision: int, action: str) -> None:
+        with self.connect() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            row = self._ticket(connection, ticket_id)
+            self._revision(row, expected_revision)
+            analysis = json.loads(row['analysis']) if row['analysis'] else None
+            status = row['status']
+            if action == 'resolve':
+                if not analysis:
+                    raise AnalysisRequired()
+                if analysis['needs_human'] or status == 'escalated':
+                    raise HumanReviewRequired()
+                status = 'resolved'
+            elif action == 'reopen':
+                if status != 'resolved':
+                    raise RevisionConflict()
+                status = 'analyzed'
+            elif action == 'take':
+                connection.execute('INSERT OR REPLACE INTO assignments VALUES (?, ?)',
+                                   (ticket_id, 'local_operator'))
+            elif action == 'release':
+                connection.execute('DELETE FROM assignments WHERE ticket_id = ?', (ticket_id,))
+            else:
+                raise ValueError('Unknown workflow action')
+            revision = expected_revision + 1
+            connection.execute('UPDATE tickets SET status = ?, revision = ?, updated_at = ? WHERE id = ?',
+                               (status, revision, timestamp(), ticket_id))
+            self._event(connection, ticket_id, action, revision, {'local_only': True})
 
     def analyze(self, ticket_id: str, expected_revision: int, analysis: dict,
                 duration_ms: float, hashes: dict) -> None:

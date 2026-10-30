@@ -19,7 +19,7 @@ copilot-predict = "support_copilot.cli:main"
 include = ["support_copilot*"]
 
 [tool.setuptools.package-data]
-support_copilot = ["static/*.html", "static/*.css", "static/*.js"]
+support_copilot = ["static/*.html", "static/*.css", "static/*.js", "static/*.svg"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

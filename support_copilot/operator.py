@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import Field, StringConstraints
 
 from support_copilot.knowledge import get_knowledge
-from support_copilot.operator_store import AnalysisRequired, MissingTicket, OperatorStore, RevisionConflict
+from support_copilot.operator_store import AnalysisRequired, HumanReviewRequired, MissingTicket, OperatorStore, RevisionConflict
 from support_copilot.schemas import ContractModel, TriageRequest
 from support_copilot.service import triage
 
@@ -44,6 +44,15 @@ class Decision(AnalyzeTicket):
     draft: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20000)]
     action: Literal['save', 'escalate']
     note: Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)] = ''
+
+
+class Workflow(AnalyzeTicket):
+    action: Literal['take', 'release', 'resolve', 'reopen']
+
+
+class ChatMessage(AnalyzeTicket):
+    role: Literal['player', 'admin']
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
 
 
 def store() -> OperatorStore:
@@ -134,7 +143,26 @@ def rule(source_id: str):
             'ref': item.ref, 'text': item.text, 'hash': knowledge.hashes['rules']}
 
 
+@router.post('/tickets/{ticket_id}/workflow')
+def workflow(ticket_id: UUID, payload: Workflow, workspace: OperatorStore = Depends(store)):
+    key = ticket_key(ticket_id)
+    workspace.workflow(key, payload.expected_revision, payload.action)
+    return workspace.get(key)
+
+
+@router.post('/tickets/{ticket_id}/chat')
+def chat_message(ticket_id: UUID, payload: ChatMessage, workspace: OperatorStore = Depends(store)):
+    key = ticket_key(ticket_id)
+    workspace.add_chat_message(key, payload.expected_revision, payload.role, payload.text)
+    return workspace.get(key)
+
+
 def install_handlers(app):
+    @app.exception_handler(HumanReviewRequired)
+    async def human_required(request, exc):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=409, content={'detail': 'Mandatory human review cannot be resolved by this workspace'})
+
     @app.exception_handler(MissingTicket)
     async def missing(request, exc):
         from fastapi.responses import JSONResponse

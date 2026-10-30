@@ -1,88 +1,716 @@
 <!doctype html>
 <html lang="ru">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#170f24">
-  <title>GRAND MOBILE · Support Desk by Oguzki</title>
-  <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/assets/workspace.css">
-  <script src="/assets/workspace.js" defer></script>
-</head>
-<body>
-<svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="m4 4-3 11v5h22v-5L20 4H4Z M1 15h6l2 3h6l2-3h6"/></symbol>
-  <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 2 2.7 7.3L22 12l-7.3 2.7L12 22l-2.7-7.3L2 12l7.3-2.7L12 2Z"/></symbol>
-  <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 5v16M12 5C9 2 4 2 2 3v16c3-1 7-1 10 2 3-3 7-3 10-2V3c-2-1-7-1-10 2Z"/></symbol>
-  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
-  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
-  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
-  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
-  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 8a9 9 0 1 0 1 7M20 3v6h-6"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
-  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M15 8V3H3v13h5"/></symbol>
-  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m12 3 10 18H2L12 3ZM12 9v5m0 3v1"/></symbol>
-  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
-  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 5m0 3v1"/></symbol>
-  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 16a2 2 0 0 1-2 2H8l-6 4V4a2 2 0 0 1 2-2h15a2 2 0 0 1 2 2v12Z"/></symbol>
-  <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 2 9 4v6c0 5-6 9-9 10-3-1-9-5-9-10V6l9-4Z m-4 10 3 3 5-6"/></symbol>
-</svg>
-<div class="app-shell">
-  <aside class="sidebar" aria-label="Навигация">
-    <a class="brand" href="/" aria-label="GRAND MOBILE — прототип поддержки Oguzki"><span class="brand-mark">G<span></span></span><span class="grand-wordmark">GRAND<strong>MOBILE</strong><small>SUPPORT DESK / OGUZKI</small></span></a>
-    <div class="workspace-name"><span class="game-mark">G</span><span>Support Copilot<small>Рабочее место оператора</small></span></div>
-    <div class="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
-    <nav>
-      <button class="nav-item active" id="nav-inbox" aria-label="Обращения"><svg class="icon"><use href="#i-inbox"/></svg><span>Обращения</span><span class="nav-count" id="nav-count">0</span></button>
-      <button class="nav-item" id="nav-history" aria-label="История решения"><svg class="icon"><use href="#i-clock"/></svg><span>История решения</span></button>
-      <button class="nav-item" id="nav-about" aria-label="О системе"><svg class="icon"><use href="#i-book"/></svg><span>О системе</span></button>
-    </nav>
-    <div class="sidebar-bottom"><div class="connection"><span class="status-dot" id="connection-dot"></span><span id="connection-label">Подключение…</span></div><div class="operator-profile"><span class="avatar">OP</span><span>Оператор<small>Прототип команды Oguzki</small></span></div></div>
-  </aside>
-  <main class="main">
-    <header class="topbar"><div class="breadcrumb"><span class="grand-topline">GRAND MOBILE</span><span>/</span><strong>Поддержка игроков</strong></div><div class="topbar-actions"><span class="local-label"><span class="status-dot"></span>Локальный режим</span><button class="icon-button" id="help" aria-label="О системе"><svg class="icon"><use href="#i-help"/></svg></button></div></header>
-    <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-text"></span><button id="retry" class="text-button">Повторить</button></div>
-    <section class="workspace-heading"><div><div class="eyebrow">GRAND MOBILE · SUPPORT DESK</div><h1>Обращения игроков <span id="heading-count" class="heading-count">0</span></h1><p>Контекст, основания и следующий шаг — в одном месте.</p></div><div class="heading-actions"><button class="button secondary" id="add-demo"><svg class="icon"><use href="#i-spark"/></svg>Добавить примеры</button><button class="button primary" id="new-ticket"><svg class="icon"><use href="#i-plus"/></svg>Новое обращение</button></div></section>
-    <div class="workspace-body">
-      <aside class="queue" aria-label="Очередь обращений">
-        <div class="queue-heading"><h2>Входящие <span id="queue-count">0</span></h2><button class="icon-button" id="refresh" aria-label="Обновить очередь"><svg class="icon"><use href="#i-refresh"/></svg></button></div>
-        <div class="search-field"><svg class="icon"><use href="#i-search"/></svg><input id="search" type="search" placeholder="Поиск по обращениям" aria-label="Поиск по обращениям"></div>
-        <div class="filters"><select id="filter-status" aria-label="Статус"><option value="">Все статусы</option><option value="new">Новые</option><option value="analyzed">Разобраны</option><option value="needs_human">Требуется человек</option><option value="saved">Сохранены</option><option value="escalated">Переданы человеку</option></select><select id="filter-lang" aria-label="Язык"><option value="">Все языки</option><option value="ru">RU</option><option value="kk">KK</option><option value="uz">UZ</option><option value="en">EN</option><option value="es">ES</option><option value="pt">PT</option><option value="und">Не определён</option></select><select id="filter-priority" aria-label="Приоритет"><option value="">Все приоритеты</option><option value="p0">P0 · критично</option><option value="p1">P1 · высокий</option><option value="p2">P2 · обычный</option><option value="p3">P3 · низкий</option></select></div>
-        <div id="ticket-list" class="ticket-list" aria-live="polite"><p class="queue-empty">Загрузка очереди…</p></div>
-        <div class="queue-footer"><svg class="icon"><use href="#i-shield"/></svg>Решения сохраняются на этом сервере.</div>
-      </aside>
-      <section class="workarea" id="workarea" aria-label="Работа с обращением">
-        <div id="empty-state" class="empty-state"><div class="empty-art"><svg class="icon"><use href="#i-inbox"/></svg><span class="empty-spark">+</span></div><span class="eyebrow">ВАШЕ РАБОЧЕЕ МЕСТО</span><h2>Начнём с одного обращения</h2><p>Создайте обращение или добавьте вымышленные примеры.<br>Разбор выполнит настоящее ядро Support Copilot.</p><button class="button primary" id="empty-demo">Попробовать на примерах<svg class="icon"><use href="#i-arrow"/></svg></button><span class="empty-note">Без подключения к игре. Ответы игрокам не отправляются.</span></div>
-        <div id="ticket-workspace" class="ticket-workspace" hidden>
-          <section class="conversation-panel" aria-label="Исходное обращение">
-            <div class="panel-heading"><span class="panel-caption"><svg class="icon"><use href="#i-message"/></svg>Обращение</span><span class="mono" id="ticket-short-id"></span></div>
-            <div class="case-body"><div class="case-labels" id="case-labels"></div><h2 id="case-title"></h2><p class="case-meta" id="case-meta"></p><div id="messages" class="messages"></div><div id="evidence" class="evidence-note"></div><div class="context-section"><span class="section-label">ИЗВЛЕЧЕНО ИЗ ТЕКСТА</span><dl id="extracted" class="extracted"><div><dt>Анализ</dt><dd>Ещё не выполнен</dd></div></dl></div></div>
-            <div class="conversation-bottom"><p>Сведения игроков требуют проверки. Количество вложений не подтверждает нарушение.</p><button class="button primary" id="analyze"><svg class="icon"><use href="#i-spark"/></svg><span id="analyze-label">Проанализировать</span></button></div>
-          </section>
-          <aside class="copilot-panel" aria-label="Результат и черновик">
-            <div class="panel-heading"><span class="copilot-title"><span class="copilot-mark"><svg class="icon"><use href="#i-spark"/></svg></span>Oguzki Copilot</span><span id="provider-badge" class="badge neutral">Ожидание</span></div>
-            <div class="tabs" role="tablist" aria-label="Результат или история"><button id="tab-result" class="tab active" role="tab" aria-selected="true" aria-controls="result-panel">Результат</button><button id="tab-history" class="tab" role="tab" aria-selected="false" aria-controls="history-panel">История правок <span id="history-count">0</span></button></div>
-            <div id="result-panel" role="tabpanel" aria-labelledby="tab-result" class="result-panel">
-              <div id="analysis-placeholder" class="analysis-placeholder"><svg class="icon"><use href="#i-spark"/></svg><h3>Второй взгляд на обращение</h3><p>Запустите анализ, чтобы увидеть категорию, основания и черновик ответа.</p><span class="small-note">Проверка оператором остаётся частью процесса.</span></div>
-              <div id="analysis-result" hidden>
-                <div class="result-summary" id="result-summary"></div>
-                <div id="attention" class="attention" hidden></div>
-                <details class="reason-details"><summary>Почему система так решила</summary><ul id="reasons" class="reason-list"></ul></details>
-                <section class="rules-section"><div class="section-heading"><h3>Основания и правила</h3><span id="rules-count" class="badge neutral">0</span></div><p class="section-description">Результаты поиска — кандидаты, а не подтверждение нарушения.</p><div id="rules-list"></div><div id="references" class="references"></div></section>
-                <section class="draft-section"><div class="section-heading"><h3>Черновик ответа</h3><span id="draft-state" class="draft-state">Без изменений</span></div><label class="sr-only" for="draft">Редактируемый черновик ответа</label><textarea id="draft" maxlength="20000" spellcheck="true" placeholder="Здесь появится черновик"></textarea><div class="draft-tools"><button id="copy-draft" class="text-button"><svg class="icon"><use href="#i-copy"/></svg>Копировать</button><button id="restore-draft" class="text-button">Вернуть исходный</button></div><details id="diff-details" class="diff-details"><summary>Сравнить с исходным черновиком</summary><div id="draft-diff"></div></details><label class="note-label" for="decision-note">Комментарий к решению <span>необязательно</span></label><textarea id="decision-note" class="decision-note" maxlength="2000" rows="2" placeholder="Что проверили или почему передаёте человеку"></textarea><div class="decision-actions"><button id="save-decision" class="button primary"><svg class="icon"><use href="#i-check"/></svg>Сохранить правку</button><button id="escalate" class="button secondary">Передать человеку<svg class="icon"><use href="#i-arrow"/></svg></button></div><p class="delivery-note">Сохраняется решение оператора. Отправки игроку и действий в игре нет.</p></section>
-                <div id="run-meta" class="run-meta"></div>
-              </div>
-            </div>
-            <div id="history-panel" role="tabpanel" aria-labelledby="tab-history" class="history-panel" hidden><p class="section-description">Локальный журнал создания, анализа и решений. Время — в часовом поясе браузера.</p><div id="history-list"></div></div>
-          </aside>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#12151B" />
+    <title>GRAND MOBILE · Area Admin Panel</title>
+    <link rel="icon" href="/assets/brand.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/assets/workspace.css" />
+    <script src="/assets/api-client.js" defer></script>
+    <script src="/assets/workspace.js" defer></script>
+    <script src="/assets/admin-views.js" defer></script>
+  </head>
+  <body>
+    <svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <symbol id="i-inbox" viewBox="0 0 24 24">
+        <path d="m4 4-3 11v5h22v-5L20 4H4Z M1 15h6l2 3h6l2-3h6" />
+      </symbol>
+      <symbol id="i-spark" viewBox="0 0 24 24">
+        <path
+          d="m12 2 2.7 7.3L22 12l-7.3 2.7L12 22l-2.7-7.3L2 12l7.3-2.7L12 2Z"
+        />
+      </symbol>
+      <symbol id="i-book" viewBox="0 0 24 24">
+        <path
+          d="M12 5v16M12 5C9 2 4 2 2 3v16c3-1 7-1 10 2 3-3 7-3 10-2V3c-2-1-7-1-10 2Z"
+        />
+      </symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24">
+        <path d="M5 12h14m-6-6 6 6-6 6" />
+      </symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24">
+        <path d="M12 5v14M5 12h14" />
+      </symbol>
+      <symbol id="i-search" viewBox="0 0 24 24">
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path d="m16 16 5 5" />
+      </symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24">
+        <path d="M20 8a9 9 0 1 0 1 7M20 3v6h-6" />
+      </symbol>
+      <symbol id="i-check" viewBox="0 0 24 24">
+        <path d="m5 12 4 4L19 6" />
+      </symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24">
+        <rect x="8" y="8" width="12" height="13" rx="2" />
+        <path d="M15 8V3H3v13h5" />
+      </symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24">
+        <path d="m12 3 10 18H2L12 3ZM12 9v5m0 3v1" />
+      </symbol>
+      <symbol id="i-close" viewBox="0 0 24 24">
+        <path d="m6 6 12 12M18 6 6 18" />
+      </symbol>
+      <symbol id="i-help" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 5m0 3v1" />
+      </symbol>
+      <symbol id="i-message" viewBox="0 0 24 24">
+        <path
+          d="M21 16a2 2 0 0 1-2 2H8l-6 4V4a2 2 0 0 1 2-2h15a2 2 0 0 1 2 2v12Z"
+        />
+      </symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24">
+        <path d="m12 2 9 4v6c0 5-6 9-9 10-3-1-9-5-9-10V6l9-4Z m-4 10 3 3 5-6" />
+      </symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24">
+        <path d="M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z" />
+      </symbol>
+      <symbol id="i-user" viewBox="0 0 24 24">
+        <circle cx="12" cy="7" r="4" />
+        <path d="M4 21v-3a8 8 0 0 1 16 0v3" />
+      </symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24">
+        <path d="M4 6h16 M4 12h16 M4 18h16 M8 3v6 M16 9v6 M9 15v6" />
+      </symbol>
+      <symbol id="i-logout" viewBox="0 0 24 24">
+        <path d="M10 3H3v18h7 M9 12h13 m-5-5 5 5-5 5" />
+      </symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24">
+        <rect x="4" y="10" width="16" height="11" rx="2" />
+        <path d="M7 10V7a5 5 0 0 1 10 0v3 M12 14v3" />
+      </symbol>
+    </svg>
+    <a class="skip-link" href="#main">К рабочему пространству</a>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Основная навигация">
+        <a class="brand" href="#reports"
+          ><img src="/assets/brand.svg" width="40" height="40" alt="" /><span
+            >GRAND<strong>MOBILE</strong></span
+          ></a
+        >
+        <div class="workspace-name">
+          <span class="tiny-square"></span>AREA ADMIN PANEL
+          <span class="version-label">06</span>
         </div>
-      </section>
+        <div class="nav-label">WORKSPACE</div>
+        <nav>
+          <button class="nav-item" data-view="dashboard">
+            <svg class="icon"><use href="#i-grid" /></svg
+            ><span>DASHBOARD<small>Обзор очереди</small></span>
+          </button>
+          <button class="nav-item active" id="nav-inbox" data-view="reports">
+            <svg class="icon"><use href="#i-shield" /></svg
+            ><span>REPORTS<small>Жалобы игроков</small></span
+            ><b id="nav-count">0</b>
+          </button>
+          <button class="nav-item" data-view="applications">
+            <svg class="icon"><use href="#i-inbox" /></svg
+            ><span>APPLICATIONS<small>Запросы в поддержку</small></span>
+          </button>
+          <button class="nav-item" data-view="players">
+            <svg class="icon"><use href="#i-user" /></svg
+            ><span>PLAYERS<small>Упоминания игроков</small></span>
+          </button>
+          <button class="nav-item" id="nav-history" data-view="logs">
+            <svg class="icon"><use href="#i-clock" /></svg
+            ><span>SERVER LOGS<small>Локальный журнал</small></span>
+          </button>
+          <div class="nav-divider"></div>
+          <button class="nav-item" id="nav-about" data-view="settings">
+            <svg class="icon"><use href="#i-settings" /></svg
+            ><span>SETTINGS<small>Рабочее пространство</small></span>
+          </button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="connection">
+            <span class="status-dot" id="connection-dot"></span
+            ><span id="connection-label">Подключение…</span>
+          </div>
+          <div class="operator-profile">
+            <span class="avatar">OP</span
+            ><span>Local operator<small>Локальный сеанс</small></span
+            ><button
+              class="icon-button"
+              id="logout"
+              aria-label="Завершить локальный сеанс"
+              title="Завершить локальный сеанс"
+            >
+              <svg class="icon"><use href="#i-logout" /></svg>
+            </button>
+          </div>
+        </div>
+      </aside>
+      <main id="main" class="main">
+        <header class="topbar">
+          <div class="breadcrumb">
+            WORKSPACE <span>/</span>
+            <strong id="breadcrumb-view">REPORTS</strong>
+          </div>
+          <div class="topbar-actions">
+            <span class="local-label"
+              ><span class="status-dot"></span>LOCAL WORKSPACE</span
+            ><span class="top-separator"></span
+            ><button class="icon-button" id="help" aria-label="О системе">
+              <svg class="icon"><use href="#i-help" /></svg>
+            </button>
+          </div>
+        </header>
+        <div id="error-banner" class="error-banner" role="alert" hidden>
+          <span id="error-text"></span
+          ><button id="retry" class="text-button">Повторить</button>
+        </div>
+        <section class="workspace-heading">
+          <div>
+            <div class="eyebrow"><span></span> CONTROL. REVIEW. RESOLVE.</div>
+            <h1 id="page-title">REPORTS<span class="title-dot">.</span></h1>
+            <p id="page-description">Каждое решение начинается с фактов.</p>
+          </div>
+          <div class="heading-actions">
+            <button class="button secondary" id="add-demo">
+              <svg class="icon"><use href="#i-spark" /></svg
+              >Демо-обращения</button
+            ><button class="button primary" id="new-ticket">
+              <svg class="icon"><use href="#i-plus" /></svg>Новое обращение
+            </button>
+          </div>
+          <div class="heading-watermark" aria-hidden="true">G</div>
+        </section>
+        <section
+          class="stats"
+          id="stats"
+          aria-label="Статистика локальной очереди"
+        ></section>
+        <section id="reports-view" class="view">
+          <div class="table-panel">
+            <div class="table-heading">
+              <div>
+                <span class="orange-tick"></span>
+                <h2 id="table-title">PLAYER COMPLAINTS</h2>
+                <span id="heading-count" class="count">0</span>
+              </div>
+              <button
+                class="icon-button"
+                id="refresh"
+                aria-label="Обновить очередь"
+              >
+                <svg class="icon"><use href="#i-refresh" /></svg>
+              </button>
+            </div>
+            <div class="filter-bar">
+              <div class="search-field">
+                <svg class="icon"><use href="#i-search" /></svg
+                ><input
+                  id="search"
+                  type="search"
+                  placeholder="Поиск по ID, теме, тексту…"
+                  aria-label="Поиск обращений"
+                /><kbd>Ctrl K</kbd>
+              </div>
+              <select id="filter-status" aria-label="Статус">
+                <option value="">Статус: все</option>
+                <option value="new">Новые</option>
+                <option value="mine">В работе у меня</option>
+                <option value="analyzed">Разобраны</option>
+                <option value="needs_human">Нужен человек</option>
+                <option value="saved">Сохранены</option>
+                <option value="escalated">Переданы человеку</option>
+                <option value="resolved">Завершены</option></select
+              ><select id="filter-priority" aria-label="Приоритет">
+                <option value="">Приоритет: все</option>
+                <option value="urgent">P0 + P1 · срочные</option>
+                <option value="p0">P0 · критичный</option>
+                <option value="p1">P1 · высокий</option>
+                <option value="p2">P2 · обыччный</option>
+                <option value="p3">P3 · низкий</option></select
+              ><select id="filter-lang" aria-label="Язык">
+                <option value="">Язык: все</option>
+                <option value="ru">Русский</option>
+                <option value="kk">Қазақша</option>
+                <option value="uz">O‘zbekcha</option>
+                <option value="und">Не определён</option></select
+              ><select id="sort-order" aria-label="Сортировка">
+                <option value="newest">Сначала новые</option>
+                <option value="oldest">Сначала старые</option>
+                <option value="priority">По приоритету</option></select
+              ><button
+                class="icon-button"
+                id="reset-filters"
+                aria-label="Сбросить фильтры"
+              >
+                <svg class="icon"><use href="#i-close" /></svg>
+              </button>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <caption class="sr-only">
+                  Обращения игроков и локальный статус обработки
+                </caption>
+                <thead>
+                  <tr>
+                    <th>ID / DATE</th>
+                    <th>PLAYER MENTIONED</th>
+                    <th>REPORTER</th>
+                    <th>REASON</th>
+                    <th>PRIORITY</th>
+                    <th>STATUS</th>
+                    <th>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody id="ticket-list"></tbody>
+              </table>
+            </div>
+            <div id="empty-state" class="empty-state" hidden>
+              <svg class="icon"><use href="#i-inbox" /></svg>
+              <h2>Здесь начинается порядок</h2>
+              <p>
+                Создайте обращение или познакомьтесь с панелью на вымышленных
+                примерах.
+              </p>
+              <button class="button primary" id="empty-demo">
+                Добавить примеры <svg class="icon"><use href="#i-arrow" /></svg>
+              </button>
+            </div>
+            <footer class="table-footer">
+              <span
+                >Найдено: <b id="queue-count">0</b>
+                <span class="muted">· локальная очередь</span></span
+              >
+              <div>
+                <span id="page-info"></span
+                ><button
+                  class="icon-button"
+                  id="page-prev"
+                  aria-label="Предыдущая страница"
+                >
+                  ←</button
+                ><button
+                  class="icon-button"
+                  id="page-next"
+                  aria-label="Следующая страница"
+                >
+                  →
+                </button>
+              </div>
+            </footer>
+          </div>
+          <div class="workspace-note">
+            <svg class="icon"><use href="#i-shield" /></svg
+            ><span
+              >Помощник готовит черновик. Окончательное решение принимает
+              администратор.</span
+            ><span>OGUZKI / WAVE 06</span>
+          </div>
+        </section>
+        <section class="view" id="secondary-view" hidden></section>
+        <div class="drawer-shade" id="drawer-shade" hidden></div>
+        <aside
+          class="workarea"
+          id="workarea"
+          aria-label="Подробности обращения"
+          hidden
+        >
+          <div class="drawer-heading">
+            <div>
+              <span class="eyebrow">CASE WORKSPACE</span
+              ><strong>Разобраться в деталях</strong>
+            </div>
+            <button
+              class="icon-button"
+              id="close-details"
+              aria-label="Закрыть детали"
+            >
+              <svg class="icon"><use href="#i-close" /></svg>
+            </button>
+          </div>
+          <div class="drawer-actions">
+            <button class="button secondary" id="take-current">
+              Взять в работу</button
+            ><button class="button primary" id="resolve-current">
+              Завершить
+            </button>
+          </div>
+          <p class="resolve-hint" id="resolve-hint"></p>
+          <div id="ticket-workspace" class="ticket-workspace" hidden>
+            <section class="conversation-panel" aria-label="Исходное обращение">
+              <div class="panel-heading">
+                <span class="panel-caption"
+                  ><svg class="icon"><use href="#i-message" /></svg
+                  >Обращение</span
+                ><span class="mono" id="ticket-short-id"></span>
+              </div>
+              <div class="case-body">
+                <div class="case-labels" id="case-labels"></div>
+                <h2 id="case-title"></h2>
+                <p class="case-meta" id="case-meta"></p>
+                <div id="messages" class="messages"></div>
+                <section class="private-chat" aria-labelledby="chat-heading">
+                  <div class="section-heading"><h3 id="chat-heading">Личный чат по обращению</h3><span class="badge amber">Локальное демо</span></div>
+                  <p class="section-description">Переписка сохраняется на этом компьютере. Вход игроков и доставка сообщений ещё не подключены.</p>
+                  <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+                  <form id="chat-form"><label for="chat-role">Отправитель в демо</label><select id="chat-role"><option value="admin">Администратор</option><option value="player">Игрок</option></select><label for="chat-text">Сообщение</label><textarea id="chat-text" maxlength="4000" rows="3" required placeholder="Напишите сообщение для обсуждения проблемы"></textarea><button class="button primary" type="submit">Сохранить сообщение</button></form>
+                </section>
+                <div id="evidence" class="evidence-note"></div>
+                <div class="context-section">
+                  <span class="section-label">ИЗВЛЕЧЕНО ИЗ ТЕКСТА</span>
+                  <dl id="extracted" class="extracted">
+                    <div>
+                      <dt>Анализ</dt>
+                      <dd>Ещё не выполнен</dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+              <div class="conversation-bottom">
+                <p>
+                  Сведения игроков требуют проверки. Количество вложений не
+                  подтверждает нарушение.
+                </p>
+                <button class="button primary" id="analyze">
+                  <svg class="icon"><use href="#i-spark" /></svg
+                  ><span id="analyze-label">Проанализировать</span>
+                </button>
+              </div>
+            </section>
+            <aside class="copilot-panel" aria-label="Результат и черновик">
+              <div class="panel-heading">
+                <span class="copilot-title"
+                  ><span class="copilot-mark"
+                    ><svg class="icon"><use href="#i-spark" /></svg></span
+                  >Oguzki Copilot</span
+                ><span id="provider-badge" class="badge neutral">Ожидание</span>
+              </div>
+              <div
+                class="tabs"
+                role="tablist"
+                aria-label="Результат или история"
+              >
+                <button
+                  id="tab-result"
+                  class="tab active"
+                  role="tab"
+                  aria-selected="true"
+                  aria-controls="result-panel"
+                >
+                  Результат</button
+                ><button
+                  id="tab-history"
+                  class="tab"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="history-panel"
+                >
+                  История правок <span id="history-count">0</span>
+                </button>
+              </div>
+              <div
+                id="result-panel"
+                role="tabpanel"
+                aria-labelledby="tab-result"
+                class="result-panel"
+              >
+                <div id="analysis-placeholder" class="analysis-placeholder">
+                  <svg class="icon"><use href="#i-spark" /></svg>
+                  <h3>Второй взгляд на обращение</h3>
+                  <p>
+                    Запустите анализ, чтобы увидеть категорию, основания и
+                    черновик ответа.
+                  </p>
+                  <span class="small-note"
+                    >Проверка оператором остаётся частью процесса.</span
+                  >
+                </div>
+                <div id="analysis-result" hidden>
+                  <div class="result-summary" id="result-summary"></div>
+                  <div id="attention" class="attention" hidden></div>
+                  <details class="reason-details">
+                    <summary>Почему система так решила</summary>
+                    <ul id="reasons" class="reason-list"></ul>
+                  </details>
+                  <section class="rules-section">
+                    <div class="section-heading">
+                      <h3>Основания и правила</h3>
+                      <span id="rules-count" class="badge neutral">0</span>
+                    </div>
+                    <p class="section-description">
+                      Результаты поиска — кандидаты, а не подтверждение
+                      нарушения.
+                    </p>
+                    <div id="rules-list"></div>
+                    <div id="references" class="references"></div>
+                  </section>
+                  <section class="draft-section">
+                    <div class="section-heading">
+                      <h3>Черновик ответа</h3>
+                      <span id="draft-state" class="draft-state"
+                        >Без изменений</span
+                      >
+                    </div>
+                    <label class="sr-only" for="draft"
+                      >Редактируемый черновик ответа</label
+                    ><textarea
+                      id="draft"
+                      maxlength="20000"
+                      spellcheck="true"
+                      placeholder="Здесь появится черновик"
+                    ></textarea>
+                    <div class="draft-tools">
+                      <button id="copy-draft" class="text-button">
+                        <svg class="icon"><use href="#i-copy" /></svg
+                        >Копировать</button
+                      ><button id="restore-draft" class="text-button">
+                        Вернуть исходный
+                      </button>
+                    </div>
+                    <details id="diff-details" class="diff-details">
+                      <summary>Сравнить с исходным черновиком</summary>
+                      <div id="draft-diff"></div>
+                    </details>
+                    <label class="note-label" for="decision-note"
+                      >Комментарий к решению <span>необязательно</span></label
+                    ><textarea
+                      id="decision-note"
+                      class="decision-note"
+                      maxlength="2000"
+                      rows="2"
+                      placeholder="Что проверили или почему передаёте человеку"
+                    ></textarea>
+                    <div class="decision-actions">
+                      <button id="save-decision" class="button primary">
+                        <svg class="icon"><use href="#i-check" /></svg>Сохранить
+                        правку</button
+                      ><button id="escalate" class="button secondary">
+                        Передать человеку<svg class="icon">
+                          <use href="#i-arrow" />
+                        </svg>
+                      </button>
+                    </div>
+                    <p class="delivery-note">
+                      Сохраняется решение оператора. Отправки игроку и действий
+                      в игре нет.
+                    </p>
+                  </section>
+                  <div id="run-meta" class="run-meta"></div>
+                </div>
+              </div>
+              <div
+                id="history-panel"
+                role="tabpanel"
+                aria-labelledby="tab-history"
+                class="history-panel"
+                hidden
+              >
+                <p class="section-description">
+                  Локальный журнал создания, анализа и решений. Время — в
+                  часовом поясе браузера.
+                </p>
+                <div id="history-list"></div>
+              </div>
+            </aside>
+          </div>
+          <div class="sanction-bar">
+            <div>
+              <span class="section-label">GAME ACTIONS</span
+              ><small>Интеграция с игрой не подключена</small>
+            </div>
+            <button
+              class="button danger"
+              id="ban-info"
+              aria-label="BAN — требуется интеграция"
+            >
+              <svg class="icon"><use href="#i-lock" /></svg>BAN</button
+            ><button
+              class="button secondary"
+              id="mute-info"
+              aria-label="MUTE — требуется интеграция"
+            >
+              <svg class="icon"><use href="#i-lock" /></svg>MUTE
+            </button>
+          </div>
+        </aside>
+      </main>
     </div>
-  </main>
-</div>
-<dialog id="new-dialog" class="dialog" aria-labelledby="new-dialog-title"><form id="new-form"><div class="dialog-heading"><div><span class="eyebrow">НОВОЕ ОБРАЩЕНИЕ</span><h2 id="new-dialog-title">Добавить в очередь</h2></div><button type="button" class="icon-button" data-close="new-dialog" aria-label="Закрыть"><svg class="icon"><use href="#i-close"/></svg></button></div><p class="section-description">Только сообщения игроков. Ответ администратора, исход и наказание не добавляются.</p><label for="new-title">Заголовок</label><input id="new-title" maxlength="120" required placeholder="Коротко о проблеме"><div class="form-row"><div><label for="new-kind">Канал</label><select id="new-kind"><option value="report">Репорт</option><option value="complaint">Жалоба</option></select></div><div><label for="new-attachments">Количество вложений</label><input id="new-attachments" type="number" min="0" step="1" value="0" required></div></div><label for="new-message">Сообщение игрока</label><textarea id="new-message" maxlength="20000" rows="5" required placeholder="Исходный текст обращения"></textarea><label for="new-reply">Ответ второго игрока <span>необязательно</span></label><textarea id="new-reply" maxlength="20000" rows="2" placeholder="Если в жалобе есть вторая сторона"></textarea><p id="new-error" class="form-error" role="alert" hidden></p><div class="dialog-footer"><button type="button" class="button secondary" data-close="new-dialog">Отмена</button><button type="submit" class="button primary" id="create-ticket">Создать обращение<svg class="icon"><use href="#i-arrow"/></svg></button></div></form></dialog>
-<dialog id="rule-dialog" class="dialog rule-dialog" aria-labelledby="rule-title"><div class="dialog-heading"><div><span class="eyebrow">ИСТОЧНИК ПРАВИЛА</span><h2 id="rule-title">Пункт правил</h2></div><button class="icon-button" data-close="rule-dialog" aria-label="Закрыть"><svg class="icon"><use href="#i-close"/></svg></button></div><p id="rule-section" class="section-description"></p><div id="rule-body" class="rule-body"></div><p id="rule-hash" class="small-note mono"></p><p class="source-note">Это текст источника. Применимость к обстоятельствам и факт нарушения проверяет администратор.</p></dialog>
-<dialog id="about-dialog" class="dialog" aria-labelledby="about-title"><div class="dialog-heading"><div><span class="eyebrow">OGUZKI · WAVE 6</span><h2 id="about-title">Помощник. Решение — за вами.</h2></div><button class="icon-button" data-close="about-dialog" aria-label="Закрыть"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="about-copy"><p>Рабочее место использует то же ядро, что <code>POST /triage</code> и пакетный запуск. Черновик можно проверить, изменить и сохранить в локальной SQLite-базе.</p><p><strong>Режим:</strong> <span id="about-provider">проверяем подключение…</span></p><p>Кандидаты правил не доказывают нарушение. Оценка уверенности эвристическая и не является вероятностью правильного ответа. Скриншоты недоступны.</p><p>Примеры написаны специально для демонстрации. Реальные обращения автоматически не загружаются. Нет доставки в игру, аутентификации операторов и общей производственной интеграции.</p><p>Рабочее место доступно на loopback-адресах. База и журнал содержат сообщения: храните их локально, не добавляйте в Git.</p><a class="button secondary" href="/docs" target="_blank" rel="noopener">Открыть документацию API<svg class="icon"><use href="#i-arrow"/></svg></a></div></dialog>
-<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-</body>
+    <dialog id="new-dialog" class="dialog" aria-labelledby="new-dialog-title">
+      <form id="new-form">
+        <div class="dialog-heading">
+          <div>
+            <span class="eyebrow">НОВОЕ ОБРАЩЕНИЕ</span>
+            <h2 id="new-dialog-title">Добавить в очередь</h2>
+          </div>
+          <button
+            type="button"
+            class="icon-button"
+            data-close="new-dialog"
+            aria-label="Закрыть"
+          >
+            <svg class="icon"><use href="#i-close" /></svg>
+          </button>
+        </div>
+        <p class="section-description">
+          Только сообщения игроков. Ответ администратора, исход и наказание не
+          добавляются.
+        </p>
+        <label for="new-title">Заголовок</label
+        ><input
+          id="new-title"
+          maxlength="120"
+          required
+          placeholder="Коротко о проблеме"
+        />
+        <div class="form-row">
+          <div>
+            <label for="new-kind">Канал</label
+            ><select id="new-kind">
+              <option value="report">Репорт</option>
+              <option value="complaint">Жалоба</option>
+            </select>
+          </div>
+          <div>
+            <label for="new-attachments">Количество вложений</label
+            ><input
+              id="new-attachments"
+              type="number"
+              min="0"
+              step="1"
+              value="0"
+              required
+            />
+          </div>
+        </div>
+        <label for="new-message">Сообщение игрока</label
+        ><textarea
+          id="new-message"
+          maxlength="20000"
+          rows="5"
+          required
+          placeholder="Исходный текст обращения"
+        ></textarea
+        ><label for="new-reply"
+          >Ответ второго игрока <span>необязательно</span></label
+        ><textarea
+          id="new-reply"
+          maxlength="20000"
+          rows="2"
+          placeholder="Если в жалобе есть вторая сторона"
+        ></textarea>
+        <p id="new-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-footer">
+          <button
+            type="button"
+            class="button secondary"
+            data-close="new-dialog"
+          >
+            Отмена</button
+          ><button type="submit" class="button primary" id="create-ticket">
+            Создать обращение<svg class="icon"><use href="#i-arrow" /></svg>
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog
+      id="rule-dialog"
+      class="dialog rule-dialog"
+      aria-labelledby="rule-title"
+    >
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">ИСТОЧНИК ПРАВИЛА</span>
+          <h2 id="rule-title">Пункт правил</h2>
+        </div>
+        <button
+          class="icon-button"
+          data-close="rule-dialog"
+          aria-label="Закрыть"
+        >
+          <svg class="icon"><use href="#i-close" /></svg>
+        </button>
+      </div>
+      <p id="rule-section" class="section-description"></p>
+      <div id="rule-body" class="rule-body"></div>
+      <p id="rule-hash" class="small-note mono"></p>
+      <p class="source-note">
+        Это текст источника. Применимость к обстоятельствам и факт нарушения
+        проверяет администратор.
+      </p>
+    </dialog>
+    <dialog id="about-dialog" class="dialog" aria-labelledby="about-title">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">OGUZKI · WAVE 6</span>
+          <h2 id="about-title">Помощник. Решение — за вами.</h2>
+        </div>
+        <button
+          class="icon-button"
+          data-close="about-dialog"
+          aria-label="Закрыть"
+        >
+          <svg class="icon"><use href="#i-close" /></svg>
+        </button>
+      </div>
+      <div class="about-copy">
+        <p>
+          Рабочее место использует то же ядро, что <code>POST /triage</code> и
+          пакетный запуск. Черновик можно проверить, изменить и сохранить в
+          локальной SQLite-базе.
+        </p>
+        <p>
+          <strong>Режим:</strong>
+          <span id="about-provider">проверяем подключение…</span>
+        </p>
+        <p>
+          Кандидаты правил не доказывают нарушение. Оценка уверенности
+          эвристическая и не является вероятностью правильного ответа. Скриншоты
+          недоступны.
+        </p>
+        <p>
+          Примеры написаны специально для демонстрации. Реальные обращения
+          автоматически не загружаются. Нет доставки в игру, аутентификации
+          операторов и общей производственной интеграции.
+        </p>
+        <p>
+          Рабочее место доступно на loopback-адресах. База и журнал содержат
+          сообщения: храните их локально, не добавляйте в Git.
+        </p>
+        <a class="button secondary" href="/docs" target="_blank" rel="noopener"
+          >Открыть документацию API<svg class="icon">
+            <use href="#i-arrow" /></svg
+        ></a>
+      </div>
+    </dialog>
+
+    <dialog id="info-dialog" class="dialog" aria-labelledby="info-title">
+      <div class="dialog-heading">
+        <h2 id="info-title"></h2>
+        <button
+          class="icon-button"
+          data-close="info-dialog"
+          aria-label="Закрыть"
+        >
+          <svg class="icon"><use href="#i-close" /></svg>
+        </button>
+      </div>
+      <div id="info-body" class="about-copy"></div>
+      <div class="dialog-footer" id="info-footer"></div>
+    </dialog>
+    <div class="session-overlay" id="session-overlay" hidden>
+      <img src="/assets/brand.svg" width="60" height="60" alt="" /><span
+        class="eyebrow"
+        >AREA ADMIN PANEL</span
+      >
+      <h2>Рабочий сеанс завершён</h2>
+      <p>
+        Обращения сохранены на локальном сервере.<br />Это экран паузы, вход с
+        паролем пока не подключён.
+      </p>
+      <button class="button primary" id="resume-session">
+        Вернуться к работе <svg class="icon"><use href="#i-arrow" /></svg>
+      </button>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  </body>
 </html>

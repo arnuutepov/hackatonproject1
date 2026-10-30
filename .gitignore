@@ -32,3 +32,4 @@ taxonomy.json
 !examples/wave3_synthetic.jsonl
 .install-temp/
 .test-temp/
+.test-temp-*/
