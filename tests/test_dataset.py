@@ -254,6 +254,28 @@ def test_organizer_style_taxonomy_uses_code_and_rejects_conflicts(tmp_path):
         validate_annotations(source, taxonomy, expected)
 
 
+def test_annotation_category_must_match_original_ticket_kind(tmp_path):
+    expected, taxonomy, labeled = annotation_fixture(tmp_path)
+    template = json.loads(expected.read_text())
+    template['request'] = {'kind': 'report'}
+    write_records(expected, [template])
+    labeled['request'] = template['request']
+    taxonomy.write_text(json.dumps({'categories': [{'code': 'sample.insult', 'kind': 'complaint'}],
+                                    'priorities': ['p2']}))
+    source = write_records(tmp_path / 'labels.jsonl', [labeled])
+    with pytest.raises(DatasetError, match='request kind'):
+        validate_annotations(source, taxonomy, expected)
+
+
+def test_taxonomy_mandatory_handoff_cannot_be_labeled_false(tmp_path):
+    expected, taxonomy, labeled = annotation_fixture(tmp_path)
+    taxonomy.write_text(json.dumps({'categories': ['sample.insult'], 'priorities': ['p2'],
+                                    'needs_human_always': ['sample.insult']}))
+    source = write_records(tmp_path / 'labels.jsonl', [labeled | {'needs_human': False}])
+    with pytest.raises(DatasetError, match='requires human'):
+        validate_annotations(source, taxonomy, expected)
+
+
 @pytest.mark.parametrize("change", [
     {"category": None}, {"category": "invented"}, {"priority": "p9"},
     {"lang": None}, {"needs_human": 1}, {"annotator": ""},

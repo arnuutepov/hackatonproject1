@@ -387,6 +387,23 @@ def validate_annotations(source: Path, taxonomy: Path, expected: Path) -> dict:
         raise DatasetError("Expected taxonomy object")
     categories = label_ids(registry.get("categories"), "categories")
     priorities = label_ids(registry.get("priorities"), "priorities")
+    category_registry = registry["categories"]
+    if isinstance(category_registry, dict):
+        category_specs = category_registry.items()
+    else:
+        category_specs = ((item.get("code", item.get("id")), item)
+                          for item in category_registry if isinstance(item, dict))
+    kinds = {}
+    for code, spec in category_specs:
+        if isinstance(spec, dict) and "kind" in spec:
+            if spec["kind"] not in ("complaint", "report"):
+                raise DatasetError("Invalid category kind in taxonomy")
+            kinds[code] = spec["kind"]
+    always_human = registry.get("needs_human_always", [])
+    if not isinstance(always_human, list) or any(
+        not isinstance(code, str) or code not in categories for code in always_human
+    ):
+        raise DatasetError("Invalid needs_human_always taxonomy registry")
     if not priorities <= {"p0", "p1", "p2", "p3"}:
         raise DatasetError("Taxonomy priorities do not match p0..p3 contract")
     templates = {}
@@ -408,12 +425,17 @@ def validate_annotations(source: Path, taxonomy: Path, expected: Path) -> dict:
             raise DatasetError(f"Annotation source or split changed at line {number}")
         if not isinstance(record.get("category"), str) or record["category"] not in categories:
             raise DatasetError(f"Missing or unknown category at line {number}")
+        category_kind = kinds.get(record["category"])
+        if category_kind is not None and record["request"].get("kind") != category_kind:
+            raise DatasetError(f"Category does not match request kind at line {number}")
         if not isinstance(record.get("priority"), str) or record["priority"] not in priorities:
             raise DatasetError(f"Missing or unknown priority at line {number}")
         if record.get("lang") not in ("ru", "kk", "uz", "en", "es", "pt", "und"):
             raise DatasetError(f"Missing or invalid language at line {number}")
         if type(record.get("needs_human")) is not bool:
             raise DatasetError(f"Missing or invalid needs_human at line {number}")
+        if record["category"] in always_human and record["needs_human"] is not True:
+            raise DatasetError(f"Taxonomy requires human review at line {number}")
         if not isinstance(record.get("annotator"), str) or not record["annotator"].strip():
             raise DatasetError(f"Missing annotator at line {number}")
         if not isinstance(record.get("notes"), str):
