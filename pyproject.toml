@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oguzki-support-copilot"
-version = "0.1.0"
-description = "Grand Mobile Support Copilot — Wave 0 contract scaffold"
+version = "0.2.0"
+description = "Grand Mobile Support Copilot — Wave 2 local lexical baseline"
 requires-python = ">=3.11"
 dependencies = ["fastapi>=0.115,<1", "pydantic>=2,<3", "uvicorn>=0.30,<1"]
 

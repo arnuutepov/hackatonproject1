@@ -1,6 +1,6 @@
 PYTHON ?= .venv/bin/python
 
-.PHONY: install serve predict test
+.PHONY: install serve predict test audit-data prepare-data
 install:
 	python3 -m venv .venv
 	.venv/bin/python -m pip install -r requirements-dev.lock
@@ -15,3 +15,11 @@ predict:
 
 test:
 	$(PYTHON) -m pytest -q
+
+audit-data:
+	@test -n "$(IN)" -a -n "$(OUT)" || (echo 'Usage: make audit-data IN=data/tickets_train.jsonl.gz OUT=outputs/audit.json' >&2; exit 2)
+	$(PYTHON) -m support_copilot.dataset audit --input "$(IN)" --output "$(OUT)"
+
+prepare-data:
+	@test -n "$(IN)" -a -n "$(OUT)" || (echo 'Usage: make prepare-data IN=data/tickets_train.jsonl.gz OUT=outputs/wave1' >&2; exit 2)
+	$(PYTHON) -m support_copilot.dataset prepare --input "$(IN)" --output-dir "$(OUT)"

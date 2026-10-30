@@ -37,14 +37,15 @@ def predict(source: Path, destination: Path) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Wave 0: predict from inference-contract JSONL")
+    parser = argparse.ArgumentParser(description="Wave 2: predict from inference-contract JSONL")
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
         count = predict(args.input, args.output)
     except (OSError, UnicodeError, ValueError) as exc:
-        print(f"Prediction failed: {exc}", file=sys.stderr)
+        # Filesystem errors can include paths; never echo request contents.
+        print('Prediction failed: ' + (str(exc) if isinstance(exc, ValueError) else type(exc).__name__), file=sys.stderr)
         return 2
     print(f"Wrote {count} predictions", file=sys.stderr)
     return 0
