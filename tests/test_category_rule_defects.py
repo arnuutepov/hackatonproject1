@@ -20,6 +20,17 @@ def category(text, kind='complaint'):
     return service.choose_category(kind, view, topics)[0]
 
 
+@pytest.mark.parametrize('kind,text,expected', [
+    ('complaint', 'DB https://example.com/evidence', 'complaint.dm'),
+    ('report', 'DB', 'report.complaint'),
+    ('report', 'Не работает DB сервера', 'report.help'),
+    ('complaint', "Noto‘g‘ri ban berilgan", 'complaint.admin'),
+    ('report', "Noto'g'ri blok qo'yilgan", 'report.complaint'),
+])
+def test_game_shorthand_and_uzbek_appeal(kind, text, expected):
+    assert category(text, kind) == expected
+
+
 DEFECTS = [
     # D1. Any admin mention next to an offence makes the admin the offender (ADMIN_ACTOR on staff_view).
     ('admin_witness', 'complaint', 'Bad_Boy оскорбил меня в чате', 'Bad_Boy оскорбил меня в чате, админ это видел',

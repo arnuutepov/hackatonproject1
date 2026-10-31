@@ -63,7 +63,7 @@ APPEAL = re.compile(
     r'(?:меня|мне|мой акк\w*)[^\n.!?]{0,25}(?:забан|замут|наказ|выдал|кикнул|заблок|посадил)|'
     r'(?:забанил|замутил|наказал|выдал|кикнул|заблокировал)\w*\s+(?:меня|мне)\b|'
     r'(?:забан|замут|выдал|дали|дал)\w*[^\n.!?]{0,25}(?:без причины|ни за что|просто так)|'
-    r'unban|appeal|razban|ban berd|nohaq|bandan chiqar|jazoni|бандан шығар|жаза[^\n]{0,25}(?:келісп|кайта|қайта)')
+    r"unban|appeal|razban|ban berd|nohaq|bandan chiqar|jazoni|noto'?g'?ri\s+(?:ban|blok)|бандан шығар|жаза[^\n]{0,25}(?:келісп|кайта|қайта)")
 # An administrator is the subject or object of the complaint (not merely addressed).
 ADMIN_ACTOR = re.compile(
     r'\b(?:админ(?:а|ом|ы|ов|ка)?|администратор(?:а|ом|ы|ов)?|модератор(?:а|ом|ы|ов)?|модер(?:а|ом|ы|ов)?|'
@@ -129,6 +129,10 @@ def choose_category(kind: str, text: str, topics: set[str]) -> tuple[str, float]
     staff_view = THIRD_PARTY_SANCTION_REQUEST.sub(' ', STAFF_ADDRESS.sub(' ', text))
     offences = [topic for topic in OFFENCES if topic in topics and _affirmed(topic, text)]
     words = len(re.findall(r'[^\W\d_]+', text))
+    # DB alone is a common in-game report shorthand; ordinary database discussions stay untouched.
+    bare_db = re.fullmatch(r'\s*db\s*(?:https?://\S+\s*)?', text) is not None
+    if bare_db:
+        return ('report.complaint' if kind == 'report' else 'complaint.dm'), .5
     if kind == 'report':
         from support_copilot.rule_question import matches as matches_rule_question
         # Personal payment/account risks keep their mandatory categories first, unchanged.
