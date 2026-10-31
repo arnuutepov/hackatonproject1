@@ -32,6 +32,7 @@ taxonomy.json
 !examples/wave3_synthetic.jsonl
 !examples/wave7_demo.jsonl
 !examples/wave7_new.jsonl
+!examples/submission-demo.jsonl
 .install-temp/
 .test-temp/
 .test-temp-*/
