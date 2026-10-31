@@ -18,7 +18,7 @@ from support_copilot.service import triage
 @asynccontextmanager
 async def lifespan(app):
     token = os.environ.get('COPILOT_TRIAGE_TOKEN', '')
-    if len(token) < 32 or not token.isascii():
+    if token and (len(token) < 32 or not token.isascii()):
         raise RuntimeError('COPILOT_TRIAGE_TOKEN должен содержать не менее 32 ASCII символов. '
                            'Создайте токен: python -c "import secrets; print(secrets.token_urlsafe(32))"')
     for name in ('rules.json', 'taxonomy.json'):
@@ -41,6 +41,9 @@ async def invalid_request(request, exc):
 @app.middleware('http')
 async def authenticate(request: Request, call_next):
     token = os.environ.get('COPILOT_TRIAGE_TOKEN', '')
+    if not token:
+        # Open jury mode: no token configured -> /triage and /health accept plain requests.
+        return await call_next(request)
     supplied = request.headers.get('authorization', '')
     if len(token) < 32 or not token.isascii() or not supplied.isascii() or not hmac.compare_digest(supplied, 'Bearer ' + token):
         return JSONResponse({'detail': 'Invalid service token'}, status_code=401)
@@ -60,7 +63,9 @@ def triage_request(payload: TriageRequest):
 
 def main():
     token = os.environ.get('COPILOT_TRIAGE_TOKEN', '')
-    if len(token) < 32 or not token.isascii():
+    if not token:
+        print('COPILOT_TRIAGE_TOKEN не задан: открытый режим для жюри, /triage без авторизации.', file=sys.stderr)
+    elif len(token) < 32 or not token.isascii():
         print('Укажите COPILOT_TRIAGE_TOKEN (не менее 32 ASCII символов). '
               'Создайте токен: python -c "import secrets; print(secrets.token_urlsafe(32))"', file=sys.stderr)
         return 2
@@ -78,7 +83,7 @@ def main():
     except (OSError, ValueError, KeyError, TypeError):
         print('Предупреждение: не удалось проверить манифест SHA-256.', file=sys.stderr)
     import uvicorn
-    uvicorn.run(app, host='127.0.0.1', port=8000, proxy_headers=False)
+    uvicorn.run(app, host=os.environ.get('COPILOT_HOST', '127.0.0.1'), port=int(os.environ.get('PORT', '8000')), proxy_headers=False)
     return 0
 
 
