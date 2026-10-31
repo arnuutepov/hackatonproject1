@@ -36,6 +36,10 @@ const REASONS = {
   taxonomy_is_draft: "Таксономия источника помечена как черновик.",
   human_review_required_no_personal_action:
     "Обстоятельства или действия по обращению требуют человека.",
+  movement_issue_requires_review:
+    "Техническая проблема с движением требует проверки специалистом.",
+  rule_question_requires_review:
+    "Не удалось подтвердить применимость проверенного правила.",
   insufficient_context_or_ambiguous_reference:
     "Недостаточно контекста либо ссылка на правило неоднозначна.",
   attachments_reported_not_inspected:
