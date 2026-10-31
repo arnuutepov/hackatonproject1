@@ -82,6 +82,11 @@ COMPLAINT_INTENT = re.compile(
     r'жалоб|пожалова|нарушает|нарушил|нарушени|nonrp|нон ?рп|\bнрп\b|флуд|багоюз|баг ?аюз|'
     r'мешает|помеха|zhalob|jalob|shikoyat|qoidani buz|шағым|ереже\w* бұз|report (?:a |this )?player')
 NICKNAME = re.compile(r'\b[A-Za-z][A-Za-z0-9]{1,24}_[A-Za-z][A-Za-z0-9_]{1,24}\b')
+# Explicit requests aimed at a third party are not an appeal against the
+# reporter's own sanction. Used only for category selection, never safety.
+THIRD_PARTY_SANCTION_REQUEST = re.compile(
+    r'\b(?:прошу|пожалуйста)\s+(?:выдайте\s+)?(?:бан|мут|варн)\s+(?:ему|ей|им|игроку)\b|'
+    r'\b(?:прошу|пожалуйста)\s+(?:забанить|забаньте|наказать|накажите|замутить|замутьте)\s+(?:его|ее|её|их|игрока)\b')
 NEGATION = re.compile(r"(?:^|[^\w])(?:не|ни|без|not|never|didn't|did not)\s+$")
 QUESTION_START = re.compile(r'^\W*(?:как|где|можно|сколько|зачем|почему|когда|что|how|where|why|qanday|qayer|қалай|қайда)\b')
 SOFTWARE_REQUEST = re.compile(
@@ -116,7 +121,7 @@ def _admin_signal(text: str, staff_view: str) -> bool:
 
 def choose_category(kind: str, text: str, topics: set[str]) -> tuple[str, float]:
     """Pick one category; `text` is the safety_view of the player's own messages."""
-    staff_view = STAFF_ADDRESS.sub(' ', text)
+    staff_view = THIRD_PARTY_SANCTION_REQUEST.sub(' ', STAFF_ADDRESS.sub(' ', text))
     offences = [topic for topic in OFFENCES if topic in topics and _affirmed(topic, text)]
     words = len(re.findall(r'[^\W\d_]+', text))
     if kind == 'report':
@@ -134,7 +139,7 @@ def choose_category(kind: str, text: str, topics: set[str]) -> tuple[str, float]
         return 'report.offtopic', 0.0
     # Generic expressions of unfairness alone do not identify an appeal when
     # the message also reports another player's conduct.
-    appeal = APPEAL.search(text)
+    appeal = APPEAL.search(THIRD_PARTY_SANCTION_REQUEST.sub(' ', text))
     generic_unfairness = appeal and re.fullmatch(r'несправедлив\w*|ошибочно', appeal.group())
     if appeal and not (generic_unfairness and offences):
         return 'complaint.admin', .65
