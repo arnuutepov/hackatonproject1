@@ -33,6 +33,7 @@ async function requestApi(path, options = {}) {
         ...options.headers,
       },
     });
+    if (response.status === 401) location.replace('/auth/login');
     if (!response.ok) {
       const error = new Error("Request failed");
       error.status = response.status;

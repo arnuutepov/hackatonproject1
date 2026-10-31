@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import platform
 import socket
+import secrets
 import subprocess
 import sys
 import time
@@ -21,16 +22,17 @@ def benchmark(passes=3) -> dict:
     with socket.socket() as sock:
         sock.bind(('127.0.0.1',0))
         port = sock.getsockname()[1]
-    env = {**os.environ,'COPILOT_DRAFT_PROVIDER':'template','COPILOT_VERIFIED_TEMPLATES':'on','PYTHONUTF8':'1'}
+    service_token = secrets.token_urlsafe(32)
+    env = {**os.environ, 'COPILOT_AUTH_MODE':'required', 'COPILOT_TRIAGE_TOKEN':service_token,'COPILOT_DRAFT_PROVIDER':'template','COPILOT_VERIFIED_TEMPLATES':'on','PYTHONUTF8':'1'}
     started = time.perf_counter()
     process = subprocess.Popen([sys.executable,'-m','uvicorn','support_copilot.api:app','--host','127.0.0.1',
-        '--port',str(port),'--no-access-log'],cwd=ROOT,env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
+        '--port',str(port),'--no-access-log','--no-proxy-headers'],cwd=ROOT,env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
         **({'creationflags':subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
     try:
         base = f'http://127.0.0.1:{port}'
         while True:
             try:
-                with urlopen(base+'/health',timeout=1) as response:
+                with urlopen(Request(base+'/health',headers={'Authorization':'Bearer '+service_token}),timeout=1) as response:
                     health = json.load(response)
                 break
             except (URLError,TimeoutError):
@@ -41,7 +43,7 @@ def benchmark(passes=3) -> dict:
         def post(row):
             payload = json.dumps(row['request'],ensure_ascii=False).encode('utf-8')
             start = time.perf_counter()
-            with urlopen(Request(base+'/triage',data=payload,headers={'Content-Type':'application/json'}),timeout=10) as response:
+            with urlopen(Request(base+'/triage',data=payload,headers={'Content-Type':'application/json','Authorization':'Bearer '+service_token}),timeout=10) as response:
                 value = json.load(response)
             elapsed = (time.perf_counter()-start)*1000
             if not value.get('draft_available') or value['generation']['attempts']:

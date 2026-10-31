@@ -247,7 +247,7 @@ def test_http_and_cli_return_complete_draft_when_model_fails(monkeypatch, tmp_pa
     source, output = tmp_path / 'in.jsonl', tmp_path / 'out.jsonl'
     source.write_text(req.model_dump_json()+'\n', encoding='utf-8')
     predict(source, output)
-    response = TestClient(app).post('/triage', json=req.model_dump())
+    response = TestClient(app, client=('127.0.0.1', 40000), base_url='http://127.0.0.1').post('/triage', json=req.model_dump())
     assert response.status_code == 200
     assert response.json() == json.loads(output.read_text(encoding='utf-8'))
     assert response.json()['draft_reply']['provenance'] == 'safe_template'
@@ -349,7 +349,7 @@ def test_real_loopback_provider_to_http_and_cli(monkeypatch, tmp_path):
         source.write_text('\n'.join(row.model_dump_json() for row in rows)+'\n', encoding='utf-8')
         predict(source, target)
         cli = [json.loads(line) for line in target.read_text(encoding='utf-8').splitlines()]
-        http = [TestClient(app).post('/triage', json=row.model_dump()).json() for row in rows]
+        http = [TestClient(app, client=('127.0.0.1', 40000), base_url='http://127.0.0.1').post('/triage', json=row.model_dump()).json() for row in rows]
         assert cli == http
         assert all(row['draft_reply']['provenance'] == 'validated_model_plan' for row in http)
         assert len(captured) == 6

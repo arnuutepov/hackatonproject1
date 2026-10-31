@@ -8,11 +8,16 @@ from fastapi.staticfiles import StaticFiles
 from support_copilot.schemas import TriageRequest, TriageResponse
 from support_copilot.service import triage
 from support_copilot.knowledge import get_knowledge
-from support_copilot.operator import install_handlers, local_access, router as operator_router
+from support_copilot.operator import install_handlers, router as operator_router
 from support_copilot.connector import router as connector_router
+from support_copilot.security import SecurityMiddleware, operator, router as auth_router
+from support_copilot.game_ingestion import router as game_router
 
-app = FastAPI(title="Oguzki Support Copilot", version="0.8.0")
+app = FastAPI(title="Oguzki Support Copilot", version="0.9.0")
 STATIC = Path(__file__).with_name('static')
+app.add_middleware(SecurityMiddleware)
+app.include_router(auth_router)
+app.include_router(game_router)
 app.include_router(operator_router)
 app.include_router(connector_router)
 install_handlers(app)
@@ -21,17 +26,18 @@ install_handlers(app)
 @app.middleware('http')
 async def workspace_headers(request: Request, call_next):
     response = await call_next(request)
-    if request.url.path == '/' or request.url.path.startswith(('/operator/', '/assets/', '/api/v1/')):
-        response.headers['Cache-Control'] = 'no-store'
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['Referrer-Policy'] = 'no-referrer'
-        response.headers['Content-Security-Policy'] = (
-            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
-            "connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+    response.headers['Cache-Control'] = 'no-store'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    if request.url.scheme == 'https':
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        "connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
     return response
 
 
-@app.get('/', include_in_schema=False, dependencies=[Depends(local_access)])
+@app.get('/', include_in_schema=False, dependencies=[Depends(operator)])
 def workspace_page():
     return FileResponse(STATIC / 'index.html')
 
@@ -42,7 +48,7 @@ app.mount('/assets', StaticFiles(directory=STATIC), name='operator_assets')
 @app.exception_handler(OSError)
 @app.exception_handler(ValueError)
 async def unavailable(request: Request, exc: Exception) -> JSONResponse:
-    return JSONResponse(status_code=503, content={'detail': 'Knowledge source unavailable or invalid'})
+    return JSONResponse(status_code=503, content={'detail': 'Service storage or knowledge unavailable'})
 
 
 @app.exception_handler(RequestValidationError)

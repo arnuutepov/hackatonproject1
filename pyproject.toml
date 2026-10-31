@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oguzki-support-copilot"
-version = "0.8.0"
-description = "Grand Mobile Support Copilot — local mock game connector"
+version = "0.9.0"
+description = "Grand Mobile Support Copilot — authenticated operator workspace and signed game ingress"
 requires-python = ">=3.11"
 dependencies = ["fastapi>=0.115,<1", "pydantic>=2,<3", "uvicorn>=0.30,<1"]
 

@@ -11,12 +11,13 @@ from pydantic import Field, StringConstraints, model_validator
 
 from support_copilot.knowledge import get_knowledge
 from support_copilot.mock_provider import SCENARIOS, player_context, scenario_request
-from support_copilot.operator import AnalyzeTicket, ShortText, local_access, store
+from support_copilot.operator import AnalyzeTicket, ShortText, store
 from support_copilot.operator_store import OperatorStore
 from support_copilot.schemas import ContractModel, TriageRequest
+from support_copilot.security import operator
 from support_copilot.service import triage
 
-router = APIRouter(prefix='/api/v1', dependencies=[Depends(local_access)])
+router = APIRouter(prefix='/api/v1', dependencies=[Depends(operator)])
 logger = logging.getLogger('uvicorn.error')
 Channel = Literal['game_chat', 'telegram']
 

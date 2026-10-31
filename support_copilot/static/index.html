@@ -97,7 +97,7 @@
         >
         <div class="workspace-name">
           <span class="tiny-square"></span>AREA ADMIN PANEL
-          <span class="version-label">08</span>
+          <span class="version-label">09</span>
         </div>
         <div class="nav-label">WORKSPACE</div>
         <nav>
@@ -135,12 +135,12 @@
           </div>
           <div class="operator-profile">
             <span class="avatar">OP</span
-            ><span>Local operator<small>Локальный сеанс</small></span
+            ><span><span id="operator-name">Оператор</span><small id="operator-role">Проверка сессии</small></span
             ><button
               class="icon-button"
               id="logout"
-              aria-label="Завершить локальный сеанс"
-              title="Завершить локальный сеанс"
+              aria-label="Выйти из учётной записи"
+              title="Выйти из учётной записи"
             >
               <svg class="icon"><use href="#i-logout" /></svg>
             </button>
@@ -358,9 +358,9 @@
                 </details>
                 <section class="private-chat" aria-labelledby="chat-heading">
                   <div class="section-heading"><h3 id="chat-heading">Личный чат по обращению</h3><span class="badge amber">Локальное демо</span></div>
-                  <p class="section-description">Переписка сохраняется на этом компьютере. Вход игроков и доставка сообщений ещё не подключены.</p>
+                  <p class="section-description">Здесь пишет вошедший оператор. Сообщения игрока принимаются только через подписанный игровой коннектор. Доставка ответа пока имитируется.</p>
                   <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
-                  <form id="chat-form"><label for="chat-role">Отправитель в демо</label><select id="chat-role"><option value="admin">Администратор</option><option value="player">Игрок</option></select><label for="chat-text">Сообщение</label><textarea id="chat-text" maxlength="4000" rows="3" required placeholder="Напишите сообщение для обсуждения проблемы"></textarea><button class="button primary" type="submit">Сохранить сообщение</button></form>
+                  <form id="chat-form"><label for="chat-text">Сообщение</label><textarea id="chat-text" maxlength="4000" rows="3" required placeholder="Напишите сообщение для обсуждения проблемы"></textarea><button class="button primary" type="submit">Сохранить сообщение</button></form>
                 </section>
                 <div id="evidence" class="evidence-note"></div>
                 <div class="context-section">
@@ -707,7 +707,7 @@
           Примеры написаны специально для демонстрации. Реальные обращения
           автоматически не загружаются. Тестовый коннектор имитирует профили
           и доставку через локальный outbox. Нет реального подключения к игре,
-          Telegram, ClickHouse и аутентификации операторов.
+          Telegram и ClickHouse. Операторы входят по персональной сессии.
         </p>
         <p>
           Рабочее место доступно на loopback-адресах. База и журнал содержат
@@ -734,20 +734,6 @@
       <div id="info-body" class="about-copy"></div>
       <div class="dialog-footer" id="info-footer"></div>
     </dialog>
-    <div class="session-overlay" id="session-overlay" hidden>
-      <img src="/assets/brand.svg" width="60" height="60" alt="" /><span
-        class="eyebrow"
-        >AREA ADMIN PANEL</span
-      >
-      <h2>Рабочий сеанс завершён</h2>
-      <p>
-        Обращения сохранены на локальном сервере.<br />Это экран паузы, вход с
-        паролем пока не подключён.
-      </p>
-      <button class="button primary" id="resume-session">
-        Вернуться к работе <svg class="icon"><use href="#i-arrow" /></svg>
-      </button>
-    </div>
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   </body>
 </html>

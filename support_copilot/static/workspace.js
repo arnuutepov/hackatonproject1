@@ -399,7 +399,7 @@ function renderTicket() {
   $("ticket-short-id").textContent = `#${shortId(current.id)}`;
   $("case-title").textContent = current.title;
   $("case-meta").textContent =
-    `${dateTime(current.created_at)} · версия ${current.revision} · ${current.connector ? "Тестовый коннектор · MOCK" : current.source === "demo" ? "Вымышленный пример" : "Добавлено оператором"}`;
+    `${dateTime(current.created_at)} · версия ${current.revision} · ${current.connector ? (current.connector.mode === "game" ? "Подписанный игровой сервер" : "Тестовый коннектор · MOCK") : current.source === "demo" ? "Вымышленный пример" : "Добавлено оператором"}`;
   $("case-labels").replaceChildren(
     badge(current.payload.kind === "complaint" ? "Жалоба" : "Репорт"),
     badge(STATUS[current.status], statusKind(current.status)),
@@ -517,6 +517,8 @@ async function start() {
       api("/tickets"),
     ]);
     config = settings;
+    $("operator-name").textContent = config.operator.username;
+    $("operator-role").textContent = config.operator.local_development ? "Явный режим разработки" : config.operator.role;
     tickets = queue.tickets;
     $("connection-dot").className = "status-dot online";
     $("connection-label").textContent = "Сервер подключён";
@@ -696,7 +698,7 @@ $("chat-form").addEventListener("submit", async (event) => {
   if (!text) return;
   setBusy(true);
   try {
-    current = await api(`/tickets/${current.id}/chat`, { method: "POST", body: JSON.stringify({expected_revision: current.revision, role: $("chat-role").value, text}) });
+    current = await api(`/tickets/${current.id}/chat`, { method: "POST", body: JSON.stringify({expected_revision: current.revision, text}) });
     $("chat-text").value = "";
     renderTicket();
     await refreshQueue();

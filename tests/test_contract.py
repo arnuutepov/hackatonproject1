@@ -8,7 +8,7 @@ from support_copilot.cli import predict
 from support_copilot.schemas import TriageRequest, TriageResponse
 from support_copilot.service import triage
 
-client = TestClient(app)
+client = TestClient(app, client=('127.0.0.1', 40000), base_url='http://127.0.0.1')
 PAYLOAD = {"kind": "complaint", "messages": [{"role": "player", "text": "Меня оскорбили", "attachments": 2}]}
 
 

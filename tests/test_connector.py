@@ -17,7 +17,7 @@ from support_copilot.operator_store import OperatorStore, RevisionConflict
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv('COPILOT_OPERATOR_DB', str(tmp_path / 'workspace.sqlite3'))
     monkeypatch.delenv('COPILOT_CONNECTOR_AUDIT', raising=False)
-    with TestClient(app, base_url='http://127.0.0.1') as client:
+    with TestClient(app, client=('127.0.0.1', 40000), base_url='http://127.0.0.1') as client:
         yield client
 
 
