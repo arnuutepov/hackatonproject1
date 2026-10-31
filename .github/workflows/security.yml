@@ -37,6 +37,8 @@ jobs:
           tests/test_security.py::test_default_configuration_does_not_enable_local_bypass
           tests/test_security.py::test_local_mode_checks_actual_peer_not_spoofed_host
           tests/test_security.py::test_non_operator_identity_is_forbidden_even_with_a_valid_session
+      - name: Capybara transport checks without external calls or private data
+        run: python -m pytest -q tests/test_capybara.py -k 'not read_only'
       - name: Static security gate (medium/high severity and confidence)
         run: bandit -r support_copilot -ll -ii
       - name: Known dependency vulnerabilities

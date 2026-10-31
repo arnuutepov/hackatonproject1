@@ -149,6 +149,9 @@ def configured_provider() -> DraftProvider | None:
     mode = os.environ.get('COPILOT_DRAFT_PROVIDER', 'template')
     if mode == 'template':
         return None
+    if mode == 'capybara':
+        from support_copilot.capybara_provider import configured_capybara
+        return configured_capybara()
     if mode != 'responses':
         raise DraftFailure('draft_invalid_configuration')
     try:

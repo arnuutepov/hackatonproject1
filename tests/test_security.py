@@ -198,7 +198,9 @@ def test_password_hash_and_reset_are_not_plaintext(secured, encoded):
     assert AuthStore().session(token) is None
 
 
-def test_login_rate_limit_is_persistent_and_errors_are_generic(secured):
+def test_login_rate_limit_is_persistent_and_errors_are_generic(secured, monkeypatch):
+    # Keep attempts in one documented fixed-minute bucket, including near minute boundaries.
+    monkeypatch.setattr("support_copilot.auth_store.time.time", lambda: 1793430000.0)
     for _ in range(10):
         assert secured.post('/auth/login', json={'username': 'unknown', 'password': PASSWORD}, headers=ORIGIN).status_code == 401
     result = secured.post('/auth/login', json={'username': 'unknown', 'password': PASSWORD}, headers=ORIGIN)
