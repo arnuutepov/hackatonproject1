@@ -1,10 +1,13 @@
 """Local operator workspace. Inference and operator decisions remain separate."""
+from __future__ import annotations
+
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import sqlite3
+import tempfile
 from uuid import uuid4
 
 
@@ -21,6 +24,10 @@ class AnalysisRequired(Exception):
 
 
 class HumanReviewRequired(Exception):
+    pass
+
+
+class ConnectorRequired(Exception):
     pass
 
 
@@ -63,6 +70,17 @@ class OperatorStore:
                 role TEXT NOT NULL CHECK(role IN ('player', 'admin')),
                 text TEXT NOT NULL,
                 created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS connector_inbox (
+                event_id TEXT PRIMARY KEY,
+                ticket_id TEXT NOT NULL UNIQUE REFERENCES tickets(id),
+                fingerprint TEXT NOT NULL, channel TEXT NOT NULL, context TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS connector_outbox (
+                sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                action_id TEXT NOT NULL UNIQUE,
+                ticket_id TEXT NOT NULL REFERENCES tickets(id),
+                fingerprint TEXT NOT NULL, event TEXT NOT NULL
             );
         ''')
         try:
@@ -115,8 +133,10 @@ class OperatorStore:
 
     def list(self) -> list[dict]:
         with self.connect() as connection:
-            rows = connection.execute('SELECT tickets.*, assignments.operator AS assigned_to FROM tickets '
+            rows = connection.execute('SELECT tickets.*, assignments.operator AS assigned_to, '
+                                      'connector_inbox.context AS connector_context FROM tickets '
                                       'LEFT JOIN assignments ON tickets.id = assignments.ticket_id '
+                                      'LEFT JOIN connector_inbox ON tickets.id = connector_inbox.ticket_id '
                                       'ORDER BY created_at DESC, id DESC').fetchall()
         summaries = []
         for row in rows:
@@ -133,6 +153,7 @@ class OperatorStore:
                 'needs_human': (analysis['needs_human'] or row['status'] == 'escalated') if analysis else None,
                 'assigned_to': row['assigned_to'],
                 'mentioned_nickname': analysis['extracted']['nickname'] if analysis else None,
+                'player_id': json.loads(row['connector_context'])['player_id'] if row['connector_context'] else None,
             })
         return summaries
 
@@ -143,7 +164,14 @@ class OperatorStore:
                                         'WHERE ticket_id = ? ORDER BY id', (ticket_id,)).fetchall()
             assignment = connection.execute('SELECT operator FROM assignments WHERE ticket_id = ?', (ticket_id,)).fetchone()
             chat = connection.execute('SELECT id, role, text, created_at FROM chat_messages WHERE ticket_id = ? ORDER BY id', (ticket_id,)).fetchall()
+            inbox = connection.execute('SELECT event_id, channel, context FROM connector_inbox WHERE ticket_id = ?',
+                                       (ticket_id,)).fetchone()
+            outbox = connection.execute('SELECT event FROM connector_outbox WHERE ticket_id = ? ORDER BY sequence',
+                                        (ticket_id,)).fetchall()
         result = dict(row)
+        result['connector'] = ({'mode': 'mock', 'event_id': inbox['event_id'], 'channel': inbox['channel'],
+                                'context': json.loads(inbox['context'])} if inbox else None)
+        result['outbox'] = [json.loads(item['event']) for item in outbox]
         result['chat_messages'] = [dict(message) for message in chat]
         result['assigned_to'] = assignment['operator'] if assignment else None
         for field in ('payload', 'analysis', 'knowledge_hashes'):
@@ -199,20 +227,120 @@ class OperatorStore:
                 duration_ms: float, hashes: dict) -> None:
         with self.connect() as connection:
             connection.execute('BEGIN IMMEDIATE')
+            self._analyze(connection, ticket_id, expected_revision, analysis, duration_ms, hashes)
+
+    def _analyze(self, connection, ticket_id, expected_revision, analysis, duration_ms, hashes):
+        row = self._ticket(connection, ticket_id)
+        self._revision(row, expected_revision)
+        revision = expected_revision + 1
+        # Escalation is sticky; a new analysis never clears a human decision.
+        status = 'escalated' if row['status'] == 'escalated' else 'analyzed'
+        connection.execute('UPDATE tickets SET analysis = ?, edited_draft = ?, status = ?, '
+                           'revision = ?, updated_at = ?, analysis_ms = ?, knowledge_hashes = ? WHERE id = ?',
+                           (json.dumps(analysis, ensure_ascii=False), analysis['draft_reply']['text'],
+                            status, revision, timestamp(), duration_ms, json.dumps(hashes), ticket_id))
+        self._event(connection, ticket_id, 'analyzed', revision, {
+            'draft': analysis['draft_reply']['text'], 'needs_human': analysis['needs_human'],
+            'provenance': analysis['draft_reply']['provenance'], 'knowledge_hashes': hashes,
+            'analysis_ms': duration_ms,
+        })
+
+    def inbox_replay(self, event_id: str, fingerprint: str) -> str | None:
+        with self.connect() as connection:
+            return self._inbox_replay(connection, event_id, fingerprint)
+
+    @staticmethod
+    def _inbox_replay(connection, event_id, fingerprint):
+        existing = connection.execute('SELECT ticket_id, fingerprint FROM connector_inbox WHERE event_id = ?',
+                                      (event_id,)).fetchone()
+        if existing:
+            if existing['fingerprint'] != fingerprint:
+                raise RevisionConflict()
+            return existing['ticket_id']
+        return None
+
+    def ingest(self, event_id: str, fingerprint: str, title: str, payload: dict, channel: str,
+               context: dict, analysis: dict, duration_ms: float, hashes: dict) -> tuple[str, bool]:
+        with self.connect() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            existing = self._inbox_replay(connection, event_id, fingerprint)
+            if existing:
+                return existing, True
+            ticket_id = self._create(connection, title, payload, 'mock_connector')
+            connection.execute('INSERT INTO connector_inbox VALUES (?, ?, ?, ?, ?)',
+                               (event_id, ticket_id, fingerprint, channel, json.dumps(context, ensure_ascii=False)))
+            self._analyze(connection, ticket_id, 1, analysis, duration_ms, hashes)
+            return ticket_id, False
+
+    def mock_action(self, ticket_id: str, payload: dict, fingerprint: str) -> tuple[dict, bool]:
+        with self.connect() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            existing = connection.execute('SELECT * FROM connector_outbox WHERE action_id = ?',
+                                          (payload['action_id'],)).fetchone()
+            if existing:
+                if existing['ticket_id'] != ticket_id or existing['fingerprint'] != fingerprint:
+                    raise RevisionConflict()
+                return json.loads(existing['event']), True
             row = self._ticket(connection, ticket_id)
-            self._revision(row, expected_revision)
-            revision = expected_revision + 1
-            # Escalation is sticky; a new analysis never clears a human decision.
-            status = 'escalated' if row['status'] == 'escalated' else 'analyzed'
-            connection.execute('UPDATE tickets SET analysis = ?, edited_draft = ?, status = ?, '
-                               'revision = ?, updated_at = ?, analysis_ms = ?, knowledge_hashes = ? WHERE id = ?',
-                               (json.dumps(analysis, ensure_ascii=False), analysis['draft_reply']['text'],
-                                status, revision, timestamp(), duration_ms, json.dumps(hashes), ticket_id))
-            self._event(connection, ticket_id, 'analyzed', revision, {
-                'draft': analysis['draft_reply']['text'], 'needs_human': analysis['needs_human'],
-                'provenance': analysis['draft_reply']['provenance'], 'knowledge_hashes': hashes,
-                'analysis_ms': duration_ms,
-            })
+            self._revision(row, payload['expected_revision'])
+            if not row['analysis']:
+                raise AnalysisRequired()
+            inbox = connection.execute('SELECT context FROM connector_inbox WHERE ticket_id = ?',
+                                       (ticket_id,)).fetchone()
+            if not inbox:
+                raise ConnectorRequired()
+            context = json.loads(inbox['context'])
+            action = payload['action']
+            if action not in {'reply', 'escalate'}:
+                raise ValueError('Unknown mock action')
+            revision = row['revision'] + 1
+            status = 'escalated' if action == 'escalate' or row['status'] == 'escalated' else 'reply_simulated'
+            connection.execute('UPDATE tickets SET edited_draft = ?, status = ?, revision = ?, updated_at = ? WHERE id = ?',
+                               (payload['draft'], status, revision, timestamp(), ticket_id))
+            event = {'action_id': payload['action_id'], 'ticket_id': ticket_id, 'revision': revision,
+                     'at': timestamp(), 'mode': 'mock', 'status': 'simulated', 'delivered': False,
+                     'player_id': context['player_id'], 'channel': payload['channel'], 'action': action,
+                     'actor': 'local_operator', 'draft': payload['draft'], 'note': payload['note'],
+                     'needs_human': json.loads(row['analysis'])['needs_human'] or status == 'escalated'}
+            connection.execute('INSERT INTO connector_outbox (action_id, ticket_id, fingerprint, event) VALUES (?, ?, ?, ?)',
+                               (payload['action_id'], ticket_id, fingerprint, json.dumps(event, ensure_ascii=False)))
+            if action == 'reply':
+                connection.execute('INSERT INTO chat_messages (ticket_id, role, text, created_at) VALUES (?, ?, ?, ?)',
+                                   (ticket_id, 'admin', payload['draft'], event['at']))
+            self._event(connection, ticket_id, 'mock_' + action, revision, event)
+            return event, False
+
+    def outbox(self) -> list[dict]:
+        with self.connect() as connection:
+            return [json.loads(row['event']) for row in connection.execute(
+                'SELECT event FROM connector_outbox ORDER BY sequence DESC LIMIT 100')]
+
+    def export_mock_audit(self) -> dict:
+        """Rebuild the JSONL projection atomically; SQLite is the authoritative audit.
+
+        Serializing exporters on the DB prevents an older snapshot overwriting a newer one.
+        A crash/failed file write never undoes or repeats the durable operator action.
+        """
+        target = Path(os.environ.get('COPILOT_CONNECTOR_AUDIT') or self.path.with_name('mock-outbox.audit.jsonl'))
+        temporary = None
+        try:
+            with self.connect() as connection:
+                connection.execute('BEGIN IMMEDIATE')
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=target.parent,
+                                                 prefix='.mock-audit-', delete=False) as stream:
+                    temporary = Path(stream.name)
+                    for row in connection.execute('SELECT event FROM connector_outbox ORDER BY sequence'):
+                        stream.write(row['event'] + '\n')
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temporary, target)
+            return {'status': 'written', 'file': target.name, 'source': 'sqlite_outbox'}
+        except OSError:
+            return {'status': 'pending', 'file': target.name, 'source': 'sqlite_outbox'}
+        finally:
+            if temporary and temporary.exists():
+                temporary.unlink(missing_ok=True)
 
     def decide(self, ticket_id: str, expected_revision: int, draft: str, action: str, note: str) -> None:
         with self.connect() as connection:

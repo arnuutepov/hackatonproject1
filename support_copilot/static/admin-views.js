@@ -25,6 +25,8 @@ const eventNames = {
   release: "Назначение снято",
   resolve: "Завершено локально",
   reopen: "Открыто повторно",
+  mock_reply: "Ответ записан в MOCK OUTBOX",
+  mock_escalate: "Эскалация записана в MOCK OUTBOX",
 };
 function button(text, cls, fn) {
   const el = node("button", cls, text);
@@ -87,7 +89,7 @@ function renderAdminQueue() {
     (t) =>
       (admin.view !== "applications" || t.kind === "report") &&
       (!query ||
-        `${t.title} ${t.preview} ${t.id} ${t.mentioned_nickname || ""}`
+        `${t.title} ${t.preview} ${t.id} ${t.mentioned_nickname || ""} ${t.player_id || ""}`
           .toLocaleLowerCase()
           .includes(query)) &&
       (!status ||
@@ -152,8 +154,8 @@ function renderAdminQueue() {
     );
     const reporter = node("td");
     reporter.append(
-      node("span", "", "Не указан"),
-      node("span", "subtext", "Нет ID аккаунта"),
+      node("span", "", t.player_id ? `ID ${t.player_id}` : "Не указан"),
+      node("span", "subtext", t.player_id ? "Вымышленный игрок · MOCK" : "Нет ID аккаунта"),
     );
     const reason = node("td");
     reason.append(
@@ -175,7 +177,7 @@ function renderAdminQueue() {
     );
     const s = node("td");
     const label =
-      t.status === "resolved"
+      t.status === "reply_simulated" ? "Reply · MOCK" : t.status === "resolved"
         ? "Closed"
         : t.status === "escalated"
           ? "Human review"

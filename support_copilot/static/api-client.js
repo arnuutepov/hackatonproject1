@@ -17,10 +17,14 @@ function errorText(error) {
 }
 
 async function api(path, options = {}) {
+  return requestApi(`/operator${path}`, options);
+}
+
+async function requestApi(path, options = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000);
   try {
-    const response = await fetch(`/operator${path}`, {
+    const response = await fetch(path, {
       ...options,
       signal: controller.signal,
       cache: "no-store",
