@@ -132,11 +132,17 @@ def choose_category(kind: str, text: str, topics: set[str]) -> tuple[str, float]
         if COMPLAINT_INTENT.search(text):
             return 'report.complaint', .5
         return 'report.offtopic', 0.0
-    if APPEAL.search(text):
+    # Generic expressions of unfairness alone do not identify an appeal when
+    # the message also reports another player's conduct.
+    appeal = APPEAL.search(text)
+    generic_unfairness = appeal and re.fullmatch(r'несправедлив\w*|ошибочно', appeal.group())
+    if appeal and not (generic_unfairness and offences):
         return 'complaint.admin', .65
     if offences:
         # «Админ оскорбил меня» is about the admin; «Админ, забаньте читера» is about the cheater.
-        if ADMIN_ACTOR.search(staff_view):
+        staff = ADMIN_ACTOR.search(staff_view)
+        first_offence = next((m for topic in offences for m in _topic_matches(topic, text)), None)
+        if staff and first_offence and staff.start() < first_offence.start():
             return 'complaint.admin', .65
         return 'complaint.' + offences[0], .65
     if PATTERNS['admin'].search(staff_view):
