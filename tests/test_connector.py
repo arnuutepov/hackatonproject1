@@ -133,7 +133,7 @@ def test_mock_reply_is_durable_and_idempotent(client):
     assert send(client, ticket, action(ticket)).status_code == 409
     assert len(OperatorStore().get(ticket['id'])['outbox']) == 1
     audit = OperatorStore().path.with_name('mock-outbox.audit.jsonl')
-    assert [json.loads(line) for line in audit.read_text().splitlines()] == [event]
+    assert [json.loads(line) for line in audit.read_text(encoding='utf-8').splitlines()] == [event]
 
 
 def test_escalation_is_sticky_and_retry_never_overwrites_newer_decision(client):
@@ -161,7 +161,7 @@ def test_failed_file_export_is_recoverable_without_repeating_action(client, monk
     assert restored['audit']['status'] == 'written' and len(restored['events']) == 1
     assert send(client, ticket, payload).json()['replayed']
     audit = OperatorStore().path.with_name('mock-outbox.audit.jsonl')
-    assert len(audit.read_text().splitlines()) == 1
+    assert len(audit.read_text(encoding='utf-8').splitlines()) == 1
 
 
 def test_concurrent_same_event_creates_one_case(client):
@@ -202,7 +202,7 @@ def test_concurrent_identical_action_and_exports_are_deduplicated(client):
     with ThreadPoolExecutor(max_workers=3) as pool:
         assert sorted(pool.map(submit, range(3))) == [False, True, True]
     audit = OperatorStore().path.with_name('mock-outbox.audit.jsonl')
-    assert len(audit.read_text().splitlines()) == 1
+    assert len(audit.read_text(encoding='utf-8').splitlines()) == 1
 
 
 @pytest.mark.parametrize('change', [{'action': 'ban'}, {'draft': ' '}, {'channel': 'clickhouse'},
