@@ -18,12 +18,14 @@ from urllib.error import URLError
 from support_copilot.measure import ROOT,load_control,percentile,implementation_hash
 
 
-def benchmark(passes=3, workers=1) -> dict:
+def benchmark(passes=3, workers=1, *, rows=None, dataset='assistant-control-silver') -> dict:
     if not 1 <= passes <= 10:
         raise ValueError('Passes must be 1..10')
     if not 1 <= workers <= 32:
         raise ValueError('Workers must be 1..32')
-    rows = load_control()
+    rows = load_control() if rows is None else rows
+    if not rows:
+        raise ValueError('Benchmark needs nonempty cases')
     state = tempfile.TemporaryDirectory(prefix='oguzki-load-')
     with socket.socket() as sock:
         sock.bind(('127.0.0.1',0))
@@ -63,7 +65,7 @@ def benchmark(passes=3, workers=1) -> dict:
         else:
             with ThreadPoolExecutor(workers) as pool:
                 times = list(pool.map(post, rows*passes))
-        return dict(protocol='wave5-local-control-v1',mode='offline-template-real-localhost-http',
+        return dict(protocol='local-http-v2',dataset=dataset,mode='offline-template-real-localhost-http',
                     n=len(times),distinct_cases=len(rows),passes=passes,workers=workers,warmups_excluded=5,failures=0,
                     cold_startup_ms=startup,p50_ms=percentile(times,.5),p95_ms=percentile(times),
                     max_ms=max(times),p95_limit_ms=5000,local_p95_target_met=percentile(times)<=5000,

@@ -58,14 +58,22 @@ def ticket_key(ticket_id: UUID) -> str:
 @router.get('/config')
 def configuration(principal=Depends(operator)):
     knowledge = get_knowledge()
+    from support_copilot.ai_runtime import provider_status
+    ai = provider_status()
     return {
         'mode': 'operator_workspace', 'delivery_available': False, 'operator': principal,
         'provider': os.environ.get('COPILOT_DRAFT_PROVIDER', 'template'),
-        'assistant_model': os.environ.get('COPILOT_CAPYBARA_MODEL', 'gemini-3.8-flash'),
+        'assistant_model': ai['model'], 'ai': ai,
         'taxonomy_version': knowledge.taxonomy['version'], 'knowledge_hashes': knowledge.hashes,
         'categories': {code: item['title'] for code, item in knowledge.categories.items()},
         'priorities': {code: item['title'] for code, item in knowledge.priorities.items()},
     }
+
+
+@router.post('/ai/check')
+def check_ai():
+    from support_copilot.ai_runtime import synthetic_check
+    return synthetic_check()
 
 
 class FeedbackLabels(ContractModel):
@@ -187,8 +195,9 @@ def chat_message(ticket_id: UUID, payload: ChatMessage, workspace: OperatorStore
 def assistant(ticket_id: UUID, payload: AssistantQuestion,
               workspace: OperatorStore = Depends(store)):
     from support_copilot.operator_assistant import answer
-    if os.environ.get('COPILOT_DRAFT_PROVIDER') != 'capybara':
-        raise HTTPException(503, 'Configure Capybara on the server first')
+    from support_copilot.ai_runtime import provider_status
+    if not provider_status()['assistant_configured']:
+        raise HTTPException(503, 'Configure an assistant provider on the server first')
     return answer(workspace.get(ticket_key(ticket_id)), payload)
 
 

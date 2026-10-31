@@ -4,7 +4,7 @@ from support_copilot import model_on_check
 
 def test_synthetic_diagnostics_do_not_count_timeouts_as_free(monkeypatch, tmp_path):
     monkeypatch.delenv('COPILOT_PRICING_FILE', raising=False)
-    monkeypatch.setattr(model_on_check, 'configured_capybara', lambda: SimpleNamespace(model='fixture'))
+    monkeypatch.setattr(model_on_check, 'configured_provider', lambda: SimpleNamespace(model='fixture'))
     calls = iter(range(6))
     def fake_triage(*args, **kwargs):
         ok = next(calls) == 0

@@ -142,7 +142,8 @@ def test_negated_offence_does_not_choose_category():
     ('+', 'complaint.invalid'),
     ('Как получить права?', 'complaint.invalid'),
     ('Нарушает правила', 'complaint.other'),
-    ('Bad_Boy нонрп', 'complaint.other'),
+    # Taxonomy explicitly includes RP violations in complaint.dm.
+    ('Bad_Boy нонрп', 'complaint.dm'),
     ('Bad_Boy мешал проехать', 'complaint.other'),
     ('Bad_Boy', 'complaint.invalid'),
     ('Как можно так играть, он постоянно мешает проезду у автосалона', 'complaint.other'),

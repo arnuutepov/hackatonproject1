@@ -31,6 +31,22 @@ def test_game_shorthand_and_uzbek_appeal(kind, text, expected):
     assert category(text, kind) == expected
 
 
+@pytest.mark.parametrize('kind,text,expected', [
+    ('complaint', 'Игрок Non RP нарушает ролевую ситуацию', 'complaint.dm'),
+    ('complaint', 'Он ведет себя нон-рп', 'complaint.dm'),
+    ('report', 'Он NonRP нарушает правила', 'report.complaint'),
+    ('report', 'Что такое Non RP?', 'report.question'),
+    ('report', 'Что значит DB?', 'report.question'),
+    ('complaint', 'В присутствии админа игрок убил меня', 'complaint.dm'),
+    ('complaint', 'На глазах у модератора игрок оскорбил меня', 'complaint.insult'),
+    ('complaint', 'В присутствии админа другой админ оскорбил меня', 'complaint.admin'),
+    ('complaint', 'Администратор оскорбил меня', 'complaint.admin'),
+    ('complaint', 'Моя организация nonprofit ждет ответа', 'complaint.other'),
+])
+def test_taxonomy_rp_scope_and_administrator_witness(kind, text, expected):
+    assert category(text, kind) == expected
+
+
 DEFECTS = [
     # D1. Any admin mention next to an offence makes the admin the offender (ADMIN_ACTOR on staff_view).
     ('admin_witness', 'complaint', 'Bad_Boy оскорбил меня в чате', 'Bad_Boy оскорбил меня в чате, админ это видел',

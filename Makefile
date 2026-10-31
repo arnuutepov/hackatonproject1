@@ -70,6 +70,17 @@ prepare-data:
 quality-report:
 	$(PYTHON) -m support_copilot.quality report --output outputs/roadmap/quality.json
 
+.PHONY: project-metrics ai-status ai-check
+project-metrics:
+	$(PYTHON) -m support_copilot.project_metrics --http --output outputs/project-metrics
+
+ai-status:
+	$(PYTHON) -m support_copilot.ai_runtime
+
+# Explicitly opt-in: sends only a handwritten synthetic request and can incur API costs.
+ai-check:
+	$(PYTHON) -m support_copilot.ai_runtime --check
+
 gold-packet:
 	$(PYTHON) -m support_copilot.quality prepare-gold --output outputs/roadmap/gold-40
 

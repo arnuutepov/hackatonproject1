@@ -41,6 +41,8 @@ class DraftFailure(Exception):
 
 
 FAILURE_CODES = frozenset({
+    'draft_budget_exceeded', 'draft_budget_unverified', 'draft_token_count_unavailable',
+    'draft_provider_authentication', 'draft_provider_rate_limited', 'draft_provider_model_unavailable',
     'draft_provider_timeout', 'draft_provider_busy', 'draft_citation_blocked_by_safety', 'draft_claim_blocked_by_safety',
     'draft_invalid_configuration', 'draft_not_configured', 'draft_provider_oversized',
     'draft_provider_incomplete', 'draft_provider_refusal', 'draft_provider_invalid_envelope',
@@ -154,6 +156,9 @@ def configured_provider() -> DraftProvider | None:
     if mode == 'capybara':
         from support_copilot.capybara_provider import configured_capybara
         return configured_capybara()
+    if mode == 'gemini':
+        from support_copilot.gemini_provider import configured_gemini
+        return configured_gemini()
     if mode != 'responses':
         raise DraftFailure('draft_invalid_configuration')
     try:

@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Serve', 'ServeApi', 'Test', 'Evaluate', 'DraftEvaluate', 'RegressionEvaluate', 'Measure', 'Benchmark', 'Predict', 'SubmissionCheck', 'AuditRepo', 'ChainVerify', 'ChainExport', 'ChainAnchor', 'ChainTamper', 'ChainBench')][string]$Mode = 'Serve',
+    [ValidateSet('Serve', 'ServeApi', 'Test', 'Evaluate', 'DraftEvaluate', 'RegressionEvaluate', 'Measure', 'Benchmark', 'Predict', 'SubmissionCheck', 'AuditRepo', 'Metrics', 'AIStatus', 'AICheck', 'ChainVerify', 'ChainExport', 'ChainAnchor', 'ChainTamper', 'ChainBench')][string]$Mode = 'Serve',
     [switch]$Install,
     [string]$PythonPath,
     [string]$EnvironmentPath = '.venv',
@@ -38,6 +38,9 @@ try {
         'DraftEvaluate' { & $venvPython -m support_copilot.evaluate_drafts --output outputs/wave-3/synthetic-safety.json }
         'RegressionEvaluate' { & $venvPython -m support_copilot.evaluate_regressions --output outputs/wave-4/regressions.json }
         'Measure' { & $venvPython -m support_copilot.measure --output outputs/wave-5 }
+        'Metrics' { & $venvPython -m support_copilot.project_metrics --http --output outputs/project-metrics }
+        'AIStatus' { & $venvPython -m support_copilot.ai_runtime }
+        'AICheck' { & $venvPython -m support_copilot.ai_runtime --check }
         'Benchmark' { & $venvPython -m support_copilot.benchmark --output outputs/wave-5/http-latency.json }
         'SubmissionCheck' { & $venvPython -m support_copilot.submission_check --output outputs/wave-7 }
         'AuditRepo' { git fetch --quiet --all; & $venvPython -m support_copilot.repo_audit }

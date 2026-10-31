@@ -6,8 +6,9 @@ import json
 from pathlib import Path
 import random
 import statistics
+import time
 
-from support_copilot.measure import classification_metrics, implementation_hash
+from support_copilot.measure import classification_metrics, implementation_hash, percentile
 from support_copilot.knowledge import get_knowledge
 from support_copilot.schemas import TriageRequest
 from support_copilot.service import triage
@@ -60,7 +61,14 @@ def checked_rows(path):
 
 
 def metrics(rows):
-    predictions=[triage(TriageRequest.model_validate(r['request']),use_configured_provider=False) for r in rows]
+    if not rows:
+        raise ValueError('Evaluation requires at least one labeled case')
+    predictions, timings = [], []
+    for row in rows:
+        request = TriageRequest.model_validate(row['request'])
+        start = time.perf_counter()
+        predictions.append(triage(request, use_configured_provider=False))
+        timings.append((time.perf_counter() - start) * 1000)
     report={f:bootstrap([getattr(p,f)==r[f] for p,r in zip(predictions,rows)]) for f in ('lang','category','priority')}
     report['language_by_class']={lang:{'n':sum(r['lang']==lang for r in rows),
         'accuracy':bootstrap([p.lang==r['lang'] for p,r in zip(predictions,rows) if r['lang']==lang])}
@@ -73,7 +81,32 @@ def metrics(rows):
     report['confidence']={'calibrated':False,'levels':{level:{'n':sum(p.confidence_level==level for p in predictions),
         'category_accuracy':bootstrap([p.category==r['category'] for p,r in zip(predictions,rows) if p.confidence_level==level])}
         for level in ('low','medium','high')}}
-    report['category_macro_f1']=classification_metrics([r['category'] for r in rows],[p.category for p in predictions],get_knowledge().categories)['macro_f1_all']
+    knowledge = get_knowledge()
+    report['classification'] = {field: classification_metrics([r[field] for r in rows],
+        [getattr(p, field) for p in predictions], classes) for field, classes in (
+        ('category', knowledge.categories), ('priority', knowledge.priorities),
+        ('lang', ['ru', 'kk', 'uz', 'en', 'es', 'pt', 'und']))}
+    report['category_macro_f1']=report['classification']['category']['macro_f1_all']
+    report['priority_macro_f1']=report['classification']['priority']['macro_f1_all']
+    # These constants are fitted on the evaluated sample: descriptive baselines, not held-out estimates.
+    majority = Counter(r['category'] for r in rows).most_common(1)[0][0]
+    by_kind = {kind: Counter(r['category'] for r in rows if r['request']['kind'] == kind).most_common(1)[0][0]
+               for kind in {r['request']['kind'] for r in rows}}
+    report['baselines'] = dict(scope='majority constants fitted on this sample; not independent',
+        majority_category_accuracy=sum(r['category'] == majority for r in rows) / len(rows),
+        majority_category_per_kind_accuracy=sum(r['category'] == by_kind[r['request']['kind']] for r in rows) / len(rows),
+        always_escalate=dict(recall=1.0 if tp+fn else None, precision=sum(r['needs_human'] for r in rows)/len(rows),
+                             needs_human_share=1.0))
+    cited = [sid for p in predictions for sid in p.draft_reply.cited]
+    report['citations'] = dict(returned=len(cited), invalid=sum(sid not in knowledge.rules for sid in cited),
+        error_rate=sum(sid not in knowledge.rules for sid in cited)/len(cited) if cited else None,
+        cases_with_citations=sum(bool(p.draft_reply.cited) for p in predictions),
+        semantic_relevance=None, semantic_relevance_status='independent_human_ratings_pending',
+        retrieval_source_errors=sum(rule.source_id not in knowledge.rules or rule.text != knowledge.rules[rule.source_id].text
+                                    for p in predictions for rule in p.retrieved_rules))
+    report['core_latency'] = dict(p50_ms=percentile(timings,.5), p95_ms=percentile(timings),
+                                  n=len(timings), scope='offline local core, not HTTP or live model')
+    report['draft_routes'] = dict(Counter(p.draft_reply.provenance for p in predictions))
     return report
 
 

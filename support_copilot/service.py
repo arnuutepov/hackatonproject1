@@ -35,6 +35,7 @@ TOPICS = {
                r"so'?k(?:di|ish|ib|adi|kan)|suk(?:di|ish)|haqorat|xaqorat|onamni|onangni|ahmoq|"
                r'балағат|боқта|сөк(?:ті|іп)|қорла|анамды|ақымақ'),
     'dm': (r'\bдм(?:ер\w*|щик\w*|ит|ят|ил\w*|ишь)?\b|\bрдм\b|\bdm\b|\brdm\b|\bдб\b|drive ?by|'
+           r'\b(?:non[ -]?rp|нон[ -]?рп|нрп)\b|'
            r'\bубил(?!ся|ась|ось)\w*|\bубив\w*|\bубий\w*|\bубь(?:ет|ют|ешь)\b|'
            r'стрел(?:я|ил)|застрел|пристрел|\bсбил(?!ся|ась|ось|и с толку)\w*|давит|задавил|таран|'
            r'\bизбил|\bударил|\bбь(?:ет|ют)\b|\bkill|ubil|ubivaet|'
@@ -68,6 +69,7 @@ APPEAL = re.compile(
 ADMIN_ACTOR = re.compile(
     r'\b(?:админ(?:а|ом|ы|ов|ка)?|администратор(?:а|ом|ы|ов)?|модератор(?:а|ом|ы|ов)?|модер(?:а|ом|ы|ов)?|'
     r'хелпер(?:а|ом|ы|ов)?|следящ\w*|admin(?:s)?|moderator)\b')
+ADMIN_WITNESS = re.compile(r'\b(?:в присутствии|на глазах у)\s+(?:админ\w*|администратор\w*|модератор\w*|хелпер\w*)\b')
 ADMIN_MISCONDUCT = re.compile(r'без причины|ни за что|несправедлив|незаконн|злоупотреб|превыш|оскорб|игнор|не отвеча|абуз|'
                               r'besabab|nohaq|себепсіз|unfair|abuse')
 PUNISHMENT = re.compile(r'\bбан(?:а|у|ом|е|ы|ил[аи]?|ят|ен|или)?\b|забан|\bмут(?:а|ом|е|ы|ил[аи]?|ят)?\b|замут|наказ|'
@@ -127,6 +129,7 @@ def _admin_signal(text: str, staff_view: str) -> bool:
 def choose_category(kind: str, text: str, topics: set[str]) -> tuple[str, float]:
     """Pick one category; `text` is the safety_view of the player's own messages."""
     staff_view = THIRD_PARTY_SANCTION_REQUEST.sub(' ', STAFF_ADDRESS.sub(' ', text))
+    staff_view = ADMIN_WITNESS.sub(' ', staff_view)
     offences = [topic for topic in OFFENCES if topic in topics and _affirmed(topic, text)]
     words = len(re.findall(r'[^\W\d_]+', text))
     # DB alone is a common in-game report shorthand; ordinary database discussions stay untouched.
@@ -139,6 +142,8 @@ def choose_category(kind: str, text: str, topics: set[str]) -> tuple[str, float]
         for topic in ('payment', 'account'):
             if topic in topics:
                 return 'report.' + topic, .65
+        if re.fullmatch(r'\s*что (?:такое|значит|означает)\s+(?:non[ -]?rp|нон[ -]?рп|нрп|dm|дм|db|дб)\s*\??\s*', text):
+            return 'report.question', .65
         if matches_rule_question(text):
             return 'report.question', .65
         # Narrow generic question, not a contested sanction. Risk topics still
@@ -338,6 +343,13 @@ def triage(request: TriageRequest, *, draft_provider=None, use_configured_provid
             result.draft_reply = reply(template,result)
             result.draft_available = True
             result.reasons.append('verified_template:'+template)
+            return result
+        from support_copilot.verified_templates import grounded_complaint
+        grounded = grounded_complaint(request, result, get_knowledge())
+        if grounded is not None:
+            result.draft_reply = grounded
+            result.draft_available = True
+            result.reasons.append('verified_template:grounded_complaint')
             return result
     return add_draft(request, result, get_knowledge(), provider=draft_provider,
                      use_configured_provider=use_configured_provider)

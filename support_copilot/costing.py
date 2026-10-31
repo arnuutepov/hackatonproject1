@@ -52,3 +52,14 @@ def configured_prices() -> dict | None:
         return value if isinstance(value,dict) else None
     except (OSError,ValueError):
         return None
+
+
+def provider_prices(model: str | None) -> dict | None:
+    """An explicit pricing file wins; otherwise only the verified Gemini tariff is known."""
+    if os.environ.get('COPILOT_PRICING_FILE'):
+        return configured_prices()
+    if model == 'gemini-2.5-flash-lite':
+        return dict(model=model, input_per_million=0.10, cached_input_per_million=0.01,
+                    output_per_million=0.40, checked_at='2026-10-31',
+                    source_url='https://ai.google.dev/gemini-api/docs/pricing')
+    return None
