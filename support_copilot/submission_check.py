@@ -18,8 +18,9 @@ import subprocess
 import sys
 import tempfile
 import time
+from support_copilot.local_http import open_local
 from urllib.error import URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 ROOT = Path(__file__).resolve().parents[1]
 DEMO = ROOT / 'examples/wave7_demo.jsonl'
@@ -134,7 +135,7 @@ def start_server():
     base = f'http://127.0.0.1:{port}'
     while True:
         try:
-            with urlopen(Request(base + '/health', headers={'Authorization': 'Bearer ' + SERVICE_TOKEN}), timeout=1) as response:
+            with open_local(Request(base + '/health', headers={'Authorization': 'Bearer ' + SERVICE_TOKEN}), timeout=1) as response:
                 health = json.load(response)
             return process, base, health, (time.perf_counter() - started) * 1000
         except (URLError, TimeoutError, ConnectionError):
@@ -147,7 +148,7 @@ def start_server():
 def post(base: str, path: str, payload: bytes, content_type='application/json'):
     start = time.perf_counter()
     try:
-        with urlopen(Request(base + path, data=payload, headers={'Content-Type': content_type, 'Authorization': 'Bearer ' + SERVICE_TOKEN}), timeout=10) as response:
+        with open_local(Request(base + path, data=payload, headers={'Content-Type': content_type, 'Authorization': 'Bearer ' + SERVICE_TOKEN}), timeout=10) as response:
             status, body = response.status, json.load(response)
     except Exception as exc:  # urllib raises HTTPError for 4xx
         status, body = getattr(exc, 'code', None), json.loads(exc.read()) if hasattr(exc, 'read') else None

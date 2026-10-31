@@ -628,9 +628,9 @@ function renderSecondary() {
 async function logoutSession() {
   if (busy || !canLeave()) return;
   try {
-    await requestApi('/auth/logout', {method:'POST'});
+    const result = await requestApi('/auth/logout', {method:'POST'});
     dirty = false;
-    location.replace('/auth/login');
+    location.replace(result.redirect || '/auth/login');
   } catch (error) { notify(errorText(error)); }
 }
 

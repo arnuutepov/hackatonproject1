@@ -13,7 +13,7 @@ from support_copilot.connector import router as connector_router
 from support_copilot.security import SecurityMiddleware, operator, router as auth_router
 from support_copilot.game_ingestion import router as game_router
 
-app = FastAPI(title="Oguzki Support Copilot", version="0.9.0")
+app = FastAPI(title="Oguzki Support Copilot", version="0.10.0")
 STATIC = Path(__file__).with_name('static')
 app.add_middleware(SecurityMiddleware)
 app.include_router(auth_router)
@@ -29,6 +29,10 @@ async def workspace_headers(request: Request, call_next):
     response.headers['Cache-Control'] = 'no-store'
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['Referrer-Policy'] = 'no-referrer'
+    response.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
+    response.headers['Cross-Origin-Embedder-Policy'] = 'require-corp'
+    response.headers['Cross-Origin-Resource-Policy'] = 'same-origin'
+    response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
     if request.url.scheme == 'https':
         response.headers['Strict-Transport-Security'] = 'max-age=31536000'
     response.headers['Content-Security-Policy'] = (

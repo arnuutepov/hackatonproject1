@@ -115,13 +115,25 @@ class SecurityMiddleware:
         body = None
         try:
             mode = os.environ.get('COPILOT_AUTH_MODE', 'required')
-            if mode not in {'required', 'local'}:
+            if mode not in {'required', 'local', 'oidc'}:
                 raise HTTPException(503, 'Invalid authentication configuration')
             public = (request.method, request.url.path) in PUBLIC
             if public:
-                pass
+                if mode == 'oidc' and request.url.path == '/auth/login':
+                    if request.method == 'POST':
+                        raise HTTPException(403, 'Password login disabled in SSO mode')
+                    from fastapi.responses import RedirectResponse
+                    await RedirectResponse('/oauth2/start?rd=%2F', status_code=303)(scope, receive, send)
+                    return
             elif GAME_PATH.fullmatch(request.url.path):
                 body = await verify_game(request)
+            elif mode == 'oidc':
+                from support_copilot.oidc_identity import identity
+                request.state.operator = await run_in_threadpool(identity, request)
+                if request.url.path.startswith('/auth/operators'):
+                    raise HTTPException(403, 'Manage staff in the organizational identity provider')
+                if request.method not in {'GET', 'HEAD', 'OPTIONS'}:
+                    check_origin(request)
             elif mode == 'local':
                 # Explicit debugging mode still checks the TCP peer, not a client-supplied Host.
                 if not loopback(request) or request.url.hostname not in {'127.0.0.1', 'localhost', '::1'}:
@@ -234,6 +246,8 @@ def me(principal=Depends(operator)):
 
 @router.post('/logout')
 def logout(request: Request, response: Response, principal=Depends(operator)):
+    if principal.get('auth_method') == 'oidc':
+        return {'logged_out': False, 'redirect': '/oauth2/sign_out?rd=%2Fauth%2Flogin'}
     AuthStore().logout(request.cookies.get(COOKIE, ''))
     response.delete_cookie(COOKIE, path='/', secure=not insecure_local_http(request), httponly=True, samesite='strict')
     return {'logged_out': True}
@@ -241,6 +255,8 @@ def logout(request: Request, response: Response, principal=Depends(operator)):
 
 @router.post('/logout-all')
 def logout_all(request: Request, response: Response, principal=Depends(operator)):
+    if principal.get('auth_method') == 'oidc':
+        raise HTTPException(403, 'Revoke organizational sessions in the identity provider')
     AuthStore().logout(request.cookies.get(COOKIE, ''), everywhere=True)
     response.delete_cookie(COOKIE, path='/', secure=not insecure_local_http(request), httponly=True, samesite='strict')
     return {'logged_out': True}

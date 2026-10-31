@@ -1,0 +1,32 @@
+{
+    email {$ACME_EMAIL}
+    admin off
+}
+{$PUBLIC_DOMAIN} {
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        -Server
+    }
+    request_body {
+        max_size 3MB
+    }
+    @game path /api/v1/game/*
+    handle @game {
+        reverse_proxy app:8000 {
+            header_up -Authorization
+            header_up -X-Forwarded-User
+            header_up -X-Forwarded-Groups
+        }
+    }
+    handle {
+        reverse_proxy sso:4180 {
+            header_up -Authorization
+            header_up -X-Forwarded-User
+            header_up -X-Forwarded-Email
+            header_up -X-Forwarded-Groups
+        }
+    }
+}

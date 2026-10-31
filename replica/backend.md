@@ -1,4 +1,4 @@
-# Backend security scope · 0.9.0
+# Backend security scope · 0.10.0
 
 This is an existing support service, not a new clone. No architecture file,
 SSO tenant, game credentials, payments or email accounts were supplied.
@@ -13,7 +13,9 @@ Implementation and deployment boundaries: [../docs/security.md](../docs/security
 - [x] HMAC game signatures, timestamp, persistent nonce, idempotent event IDs.
 - [x] Synthetic tests for unauthenticated access, cross-role abuse, impersonation,
       replay, body tampering and actual uvicorn transport.
-- [ ] Organizational SSO/MFA, production TLS/proxy and access policy: owner setup.
+- [x] OIDC JWT/MFA claim verification and pinned Caddy/oauth2-proxy deployment configuration.
+- [x] Read-only CI security gate and reviewable branch-protection apply script.
+- [ ] Live organizational MFA enrollment, DNS/TLS, GitHub protection: owner/admin prerequisites pending.
 - [ ] External delivery, game profile lookup, payments/email: out of current scope.
 - [ ] Production backup retention, disaster recovery and independent penetration test.
 

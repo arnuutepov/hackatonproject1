@@ -1,0 +1,45 @@
+name: security
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  security-gate:
+    name: security-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+          cache: pip
+      - run: python -m pip install -r requirements-dev.lock -r requirements-security.lock
+      - run: python -m pip install --no-deps -e .
+      - name: Data-independent authentication and SSO checks
+        run: >-
+          python -m pytest -q tests/test_oidc.py tests/test_local_http.py tests/test_deploy_policy.py
+          tests/test_security.py::test_every_documented_route_is_closed_without_session
+          tests/test_security.py::test_future_route_without_dependencies_is_still_closed
+          tests/test_security.py::test_host_and_forwarded_headers_are_not_identity
+          tests/test_security.py::test_login_cookie_rotation_logout_and_session_hashes
+          tests/test_security.py::test_expired_and_disabled_sessions_are_rejected
+          tests/test_security.py::test_agent_cannot_manage_users_or_forge_chat_role
+          tests/test_security.py::test_admin_update_revokes_sessions_and_last_admin_is_preserved
+          tests/test_security.py::test_default_configuration_does_not_enable_local_bypass
+          tests/test_security.py::test_local_mode_checks_actual_peer_not_spoofed_host
+          tests/test_security.py::test_non_operator_identity_is_forbidden_even_with_a_valid_session
+      - name: Static security gate (medium/high severity and confidence)
+        run: bandit -r support_copilot -ll -ii
+      - name: Known dependency vulnerabilities
+        run: pip-audit -r requirements-dev.lock
+      - name: Repository data and key patterns
+        run: python -m support_copilot.repo_audit

@@ -9,7 +9,8 @@ import secrets
 import subprocess
 import sys
 import time
-from urllib.request import Request,urlopen
+from urllib.request import Request
+from support_copilot.local_http import open_local
 from urllib.error import URLError
 
 from support_copilot.measure import ROOT,load_control,percentile,implementation_hash
@@ -32,7 +33,7 @@ def benchmark(passes=3) -> dict:
         base = f'http://127.0.0.1:{port}'
         while True:
             try:
-                with urlopen(Request(base+'/health',headers={'Authorization':'Bearer '+service_token}),timeout=1) as response:
+                with open_local(Request(base+'/health',headers={'Authorization':'Bearer '+service_token}),timeout=1) as response:
                     health = json.load(response)
                 break
             except (URLError,TimeoutError):
@@ -43,7 +44,7 @@ def benchmark(passes=3) -> dict:
         def post(row):
             payload = json.dumps(row['request'],ensure_ascii=False).encode('utf-8')
             start = time.perf_counter()
-            with urlopen(Request(base+'/triage',data=payload,headers={'Content-Type':'application/json','Authorization':'Bearer '+service_token}),timeout=10) as response:
+            with open_local(Request(base+'/triage',data=payload,headers={'Content-Type':'application/json','Authorization':'Bearer '+service_token}),timeout=10) as response:
                 value = json.load(response)
             elapsed = (time.perf_counter()-start)*1000
             if not value.get('draft_available') or value['generation']['attempts']:
