@@ -54,7 +54,9 @@ def test_rule_handles_the_working_half_of_the_pair(name, kind, working, _broken,
 
 
 FIXED = {'admin_witness', 'bare_appeal_word', 'bare_appeal_word_typo',
-         'punish_request', 'question_without_keyword', 'help_closed_verb_list'}
+         'punish_request', 'question_without_keyword', 'help_closed_verb_list',
+         'punish_passive', 'question_mark_only', 'rule_question_with_punishment',
+         'confusable_latin_m', 'digit_for_letter'}
 
 
 @pytest.mark.parametrize('name,kind,_working,broken,expected', [

@@ -55,3 +55,24 @@ def test_report_help_and_question_with_sensitive_precedence(text, expected):
     assert result.category == expected
     if expected in {'report.payment', 'report.account', 'report.complaint', 'report.question'}:
         assert result.needs_human
+
+
+@pytest.mark.parametrize('text,kind,expected', [
+    ('Он Mатерит в чате', 'complaint', 'complaint.insult'),
+    ('Он 0скорбил меня', 'complaint', 'complaint.insult'),
+    ('Сколько длится мут за флуд?', 'report', 'report.question'),
+    ('Меня замутили, сколько длится мут за флуд?', 'report', 'report.complaint'),
+    ('Bad_Boy флудит, он должен быть наказан', 'complaint', 'complaint.other'),
+])
+def test_remaining_defects_keep_original_and_human_review(text, kind, expected):
+    request = TriageRequest.model_validate({'kind': kind, 'messages': [
+        {'role': 'player', 'text': text}]})
+    result = triage(request, use_configured_provider=False)
+    assert result.category == expected
+    assert result.needs_human
+    assert request.messages[0].text == text
+
+
+def test_matching_view_does_not_rewrite_player_identifiers():
+    from support_copilot.safety import safety_view
+    assert safety_view('Ник Player_0123 и 0123') == 'ник player_0123 и 0123'

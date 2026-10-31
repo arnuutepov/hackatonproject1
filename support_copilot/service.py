@@ -44,7 +44,7 @@ TOPICS = {
              r'\b(?:персонаж|герой|машина|транспорт)\w*\s+не\s+(?:двигается|движется|едет)\b|ошибк|краш|'
              r'провалил|под карт|под земл|телепорт|stuck|\bbug|\blag\b|crash|\berror\b|'
              r'zastr|\bbag\b|vylet|qotib|ishlamay|\bxato|тұрып қал|жұмыс істемей|\bқате'),
-    'question': (r'\bкак\b|\bгде\b|\bможно\b|\bсколько\b|\bзачем\b|\bhow\b|\bwhere\b|qanday|qayer|қалай|қайда|каким|'
+    'question': (r'\bкак\b|\bгде\b|\bможно\b|\bсколько\b|\bзачем\b|\bкогда\b|\bhow\b|\bwhere\b|qanday|qayer|қалай|қайда|каким|'
                  r'\b(?:подскажите|скажите|уточните)\s+(?:мне\s+)?(?:стоимость|цену|цен[ауе]|сколько|где|как)\b'),
 }
 # Russian case forms: «на сервере 4», «с сервера 12».
@@ -88,7 +88,9 @@ NICKNAME = re.compile(r'\b[A-Za-z][A-Za-z0-9]{1,24}_[A-Za-z][A-Za-z0-9_]{1,24}\b
 # reporter's own sanction. Used only for category selection, never safety.
 THIRD_PARTY_SANCTION_REQUEST = re.compile(
     r'\b(?:прошу|пожалуйста)\s+(?:выдайте\s+)?(?:бан|мут|варн)\s+(?:ему|ей|им|игроку)\b|'
-    r'\b(?:прошу|пожалуйста)\s+(?:забанить|забаньте|наказать|накажите|замутить|замутьте)\s+(?:его|ее|её|их|игрока)\b')
+    r'\b(?:прошу|пожалуйста)\s+(?:забанить|забаньте|наказать|накажите|замутить|замутьте)\s+(?:его|ее|её|их|игрока)\b|'
+    r'\b(?:он|она|они|игрок)\s+долж(?:ен|на|ны)\s+быть\s+наказан\w*\b')
+SANCTION_DURATION_QUESTION = re.compile(r'^\s*сколько\s+длится\s+(?:мут|бан|варн)\s+за\s+[^.!?]+\??\s*$')
 NEGATION = re.compile(r"(?:^|[^\w])(?:не|ни|без|not|never|didn't|did not)\s+$")
 QUESTION_START = re.compile(r'^\W*(?:как|где|можно|сколько|зачем|почему|когда|что|how|where|why|qanday|qayer|қалай|қайда)\b')
 SOFTWARE_REQUEST = re.compile(
@@ -131,6 +133,10 @@ def choose_category(kind: str, text: str, topics: set[str]) -> tuple[str, float]
         for topic in ('payment', 'account'):
             if topic in topics:
                 return 'report.' + topic, .65
+        # Narrow generic question, not a contested sanction. Risk topics still
+        # participate in escalation independently of the category.
+        if SANCTION_DURATION_QUESTION.fullmatch(text):
+            return 'report.question', .65
         if _admin_signal(text, staff_view) or offences:
             return 'report.complaint', .65
         for topic in ('help', 'question'):
