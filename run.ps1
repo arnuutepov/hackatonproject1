@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Serve', 'Test', 'Evaluate', 'DraftEvaluate', 'RegressionEvaluate', 'Measure', 'Benchmark', 'Predict', 'SubmissionCheck', 'AuditRepo')][string]$Mode = 'Serve',
+    [ValidateSet('Serve', 'Test', 'Evaluate', 'DraftEvaluate', 'RegressionEvaluate', 'Measure', 'Benchmark', 'Predict', 'SubmissionCheck', 'AuditRepo', 'ChainVerify', 'ChainExport', 'ChainAnchor', 'ChainTamper', 'ChainBench')][string]$Mode = 'Serve',
     [switch]$Install,
     [string]$PythonPath,
     [string]$EnvironmentPath = '.venv',
@@ -40,6 +40,11 @@ try {
         'Benchmark' { & $venvPython -m support_copilot.benchmark --output outputs/wave-5/http-latency.json }
         'SubmissionCheck' { & $venvPython -m support_copilot.submission_check --output outputs/wave-7 }
         'AuditRepo' { git fetch --quiet --all; & $venvPython -m support_copilot.repo_audit }
+        'ChainVerify' { & $venvPython -m support_copilot.chain_cli verify }
+        'ChainExport' { & $venvPython -m support_copilot.chain_cli export }
+        'ChainAnchor' { & $venvPython -m support_copilot.chain_cli anchor }
+        'ChainTamper' { & $venvPython -m support_copilot.chain_cli tamper }
+        'ChainBench' { & $venvPython -m support_copilot.chain_cli bench }
         'Predict' {
             if (-not $InputFile -or -not $OutputFile) { throw 'Specify -InputFile and -OutputFile' }
             & $venvPython -m support_copilot.cli --input $InputFile --output $OutputFile

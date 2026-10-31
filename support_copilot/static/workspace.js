@@ -28,6 +28,9 @@ const REASONS = {
     "Классификация использует локальный лексический baseline.",
   confidence_is_uncalibrated:
     "Оценка уверенности эвристическая, не вероятность правильности.",
+  duplicate_scope_within_ticket: "Повторы сообщений проверяются внутри обращения; похожие обращения требуют отдельной проверки.",
+  repeated_player_message_simhash: "Найден повтор сообщения игрока; безопасность и эскалация не отключены.",
+  language_transliterated_ru: "Вероятно русский текст в транслитерации.",
   duplicate_detection_not_implemented:
     "Межтикетная дедупликация не подключена.",
   taxonomy_is_draft: "Таксономия источника помечена как черновик.",
@@ -131,6 +134,7 @@ function setBusy(value) {
       ? "Повторить анализ"
       : "Проанализировать";
   $("workarea").setAttribute("aria-busy", String(value));
+  $("assistant-submit").disabled = value || config?.provider !== "capybara" || $("assistant-submit").dataset.pending === "true";
   if (!value) {
     updateWorkflowActions();
     updatePagination();
@@ -172,6 +176,9 @@ function renderHistory() {
     if (event.detail.note) item.append(node("p", "", event.detail.note));
     if (event.detail.needs_human)
       item.append(node("p", "", "Проверка человеком остаётся обязательной."));
+    if (event.detail.chain_block !== undefined)
+      item.append(button(`Записано в блок #${event.detail.chain_block} →`, "text-button", () =>
+        openChainBlock(event.detail.chain_block)));
     if (event.detail.draft !== undefined) {
       const details = node("details");
       details.append(
@@ -277,6 +284,7 @@ function renderAnalysis() {
       `${result.priority.toUpperCase()} · ${config?.priorities[result.priority] || ""}`,
     ],
     ["Язык ответа", LANG[result.draft_reply.lang] || result.draft_reply.lang],
+    ["Уверенность", ({low:"Низкая",medium:"Средняя",high:"Высокая"}[result.confidence_level] || "Низкая") + " · эвристика, не вероятность"],
     [
       "Маршрут",
       current.needs_human ? "Требуется человек" : "Черновик для проверки",

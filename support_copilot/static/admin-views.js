@@ -14,6 +14,7 @@ const viewLabels = {
   dashboard: "DASHBOARD",
   players: "PLAYERS",
   logs: "SERVER LOGS",
+  chain: "AUDIT CHAIN",
   settings: "SETTINGS",
 };
 const eventNames = {
@@ -384,6 +385,7 @@ function navigate(view) {
       "Состояние обращений. Только данные вашего рабочего пространства.",
     players: "Упоминания в обращениях. Без предположений о репутации.",
     logs: "История локальных действий, сохранённых на этом сервере.",
+    chain: "Подмена прошлого ломает цепочку, и это видно одной проверкой.",
     settings: "Настройте рабочее пространство под свой ритм.",
   }[view];
   document.querySelectorAll("[data-view]").forEach((b) => {
@@ -615,6 +617,10 @@ function renderSettings() {
 function renderSecondary() {
   if (admin.view === "logs") {
     renderLogs();
+    return;
+  }
+  if (admin.view === "chain") {
+    renderChain();
     return;
   }
   $("secondary-view").replaceChildren(

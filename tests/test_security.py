@@ -439,3 +439,26 @@ def test_non_operator_identity_is_forbidden_even_with_a_valid_session(secured, e
     secured.cookies.set(COOKIE, token)
     assert secured.get('/operator/tickets').status_code == 403
     assert secured.get('/api/v1/outbox').status_code == 403
+
+
+@pytest.mark.private_data
+def test_feedback_roles_and_second_review_do_not_change_inference(secured):
+    login(secured,'agent')
+    value=analyze(secured,ticket(secured,'Застрял в текстурах'))
+    before=value['analysis']
+    saved=secured.post(f"/operator/tickets/{value['id']}/decision",json={
+        'expected_revision':value['revision'],'draft':'Уточните место и сервер, пожалуйста.',
+        'action':'save','note':''},headers=ORIGIN)
+    assert saved.status_code==200
+    assert secured.get('/operator/feedback').status_code==403
+    assert secured.post('/operator/feedback/1/approve',json={
+        'category':'report.help','priority':'p2','lang':'ru','needs_human':False},headers=ORIGIN).status_code==403
+    secured.post('/auth/logout',headers=ORIGIN)
+    login(secured,'admin')
+    queue=secured.get('/operator/feedback').json()['items']
+    assert len(queue)==1
+    labels={'category':'report.help','priority':'p2','lang':'ru','needs_human':False}
+    path=f"/operator/feedback/{queue[0]['id']}/approve"
+    assert secured.post(path,json=labels,headers=ORIGIN).status_code==200
+    assert secured.post(path,json={**labels,'needs_human':True},headers=ORIGIN).status_code==422
+    assert secured.get(f"/operator/tickets/{value['id']}").json()['analysis']==before

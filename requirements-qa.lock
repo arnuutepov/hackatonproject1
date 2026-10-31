@@ -1,0 +1,2 @@
+# Optional schema fuzz gate; install beside requirements-dev.lock in a separate venv.
+schemathesis==4.32.7

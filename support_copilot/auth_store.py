@@ -7,8 +7,12 @@ from pathlib import Path
 import secrets
 import sqlite3
 import time
+import json
+import logging
 from threading import BoundedSemaphore
 from uuid import uuid4
+
+from support_copilot.audit_chain import AuditChain
 
 ROLES = frozenset({'agent', 'lead', 'admin'})
 SESSION_SECONDS = 8 * 60 * 60
@@ -53,7 +57,13 @@ class AuthStore:
         db = sqlite3.connect(self.path, timeout=10)
         self.path.chmod(0o600)
         db.row_factory = sqlite3.Row
+        db.execute('PRAGMA journal_mode = WAL')
+        db.execute('PRAGMA busy_timeout = 10000')
         db.executescript('''
+            CREATE TABLE IF NOT EXISTS identity_chain_outbox (
+                event_id TEXT PRIMARY KEY, event_type TEXT NOT NULL, actor TEXT NOT NULL,
+                payload TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0
+            );
             CREATE TABLE IF NOT EXISTS operators (
                 id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL, role TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1
@@ -76,11 +86,28 @@ class AuthStore:
         try:
             yield db
             db.commit()
+            self.flush_chain(db)
         except Exception:
             db.rollback()
             raise
         finally:
             db.close()
+
+    @staticmethod
+    def _journal(db, event_type, actor, payload):
+        db.execute('INSERT INTO identity_chain_outbox(event_id, event_type, actor, payload) VALUES (?, ?, ?, ?)',
+                   (str(uuid4()), event_type, actor, json.dumps(payload)))
+
+    @staticmethod
+    def flush_chain(db):
+        try:
+            for row in db.execute('SELECT * FROM identity_chain_outbox WHERE delivered = 0 ORDER BY rowid LIMIT 100').fetchall():
+                AuditChain().append_once(row['event_id'], row['event_type'], row['actor'], json.loads(row['payload']))
+                db.execute('UPDATE identity_chain_outbox SET delivered = 1 WHERE event_id = ?', (row['event_id'],))
+                db.commit()
+        except (OSError, sqlite3.Error, ValueError):
+            db.rollback()
+            logging.getLogger(__name__).warning('Committed identity audit pending chain publication')
 
     @staticmethod
     def public(row):
@@ -97,6 +124,8 @@ class AuthStore:
                        (key, username, encoded, role))
             db.execute('INSERT INTO identity_audit (at, actor, action, subject) VALUES (?, ?, ?, ?)',
                        (time.time(), actor, 'create_operator', key))
+            # Transactional outbox commits with identity; publication is idempotent after commit.
+            self._journal(db, 'operator.created', actor, {'id': key, 'role': role})
             return {'id': key, 'username': username, 'role': role, 'active': 1}
 
     def users(self) -> list[dict]:
@@ -117,6 +146,9 @@ class AuthStore:
             db.execute('DELETE FROM sessions WHERE operator_id = ?', (key,))
             db.execute('INSERT INTO identity_audit (at, actor, action, subject) VALUES (?, ?, ?, ?)',
                        (time.time(), actor, 'update_operator', key))
+            self._journal(db, 'operator.role_change', actor, {
+                'id': key, 'role': role, 'active': bool(active),
+                'previous_role': row['role'], 'previous_active': bool(row['active'])})
 
     def reset_password(self, username: str, password: str):
         encoded = hash_password(password)
@@ -128,6 +160,7 @@ class AuthStore:
             db.execute('DELETE FROM sessions WHERE operator_id = ?', (row['id'],))
             db.execute('INSERT INTO identity_audit (at, actor, action, subject) VALUES (?, ?, ?, ?)',
                        (time.time(), 'local_cli', 'reset_password', row['id']))
+            self._journal(db, 'operator.password_reset', 'local_cli', {'id': row['id']})
 
     def reserve_login(self, username: str, peer: str) -> bool:
         bucket = int(time.time() // 60)
@@ -168,6 +201,7 @@ class AuthStore:
             db.execute('INSERT INTO sessions VALUES (?, ?, ?)', (token_hash(token), row['id'], time.time() + SESSION_SECONDS))
             db.execute('INSERT INTO identity_audit (at, actor, action, subject) VALUES (?, ?, ?, ?)',
                        (time.time(), row['id'], 'login', row['id']))
+            self._journal(db, 'operator.login', row['id'], {'id': row['id'], 'role': latest['role']})
         return token, self.public(latest)
 
     def session(self, token: str) -> dict | None:
@@ -180,7 +214,9 @@ class AuthStore:
 
     def logout(self, token: str, everywhere=False):
         with self.connect() as db:
-            row = db.execute('SELECT operator_id FROM sessions WHERE digest = ?', (token_hash(token),)).fetchone()
+            row = db.execute('SELECT sessions.operator_id, operators.role FROM sessions '
+                             'JOIN operators ON operators.id = sessions.operator_id WHERE digest = ?',
+                             (token_hash(token),)).fetchone()
             if row:
                 if everywhere:
                     db.execute('DELETE FROM sessions WHERE operator_id = ?', (row['operator_id'],))
@@ -188,6 +224,8 @@ class AuthStore:
                     db.execute('DELETE FROM sessions WHERE digest = ?', (token_hash(token),))
                 db.execute('INSERT INTO identity_audit (at, actor, action, subject) VALUES (?, ?, ?, ?)',
                            (time.time(), row['operator_id'], 'logout_all' if everywhere else 'logout', row['operator_id']))
+                self._journal(db, 'operator.logout', row['operator_id'], {
+                    'id': row['operator_id'], 'role': row['role'], 'everywhere': everywhere})
 
     def consume_nonce(self, key_id: str, nonce: str, at: float) -> bool:
         with self.connect() as db:

@@ -11,6 +11,8 @@
     <script src="/assets/workspace.js" defer></script>
     <script src="/assets/connector-ui.js" defer></script>
     <script src="/assets/admin-views.js" defer></script>
+    <script src="/assets/audit-chain.js" defer></script>
+    <script src="/assets/feedback-ui.js" defer></script>
   <script src="/assets/assistant-ui.js" defer></script>
 </head>
   <body>
@@ -123,6 +125,10 @@
             <svg class="icon"><use href="#i-clock" /></svg
             ><span>SERVER LOGS<small>Локальный журнал</small></span>
           </button>
+          <button class="nav-item" id="nav-chain" data-view="chain">
+            <svg class="icon"><use href="#i-shield" /></svg
+            ><span>AUDIT CHAIN<small>Аудит-цепочка</small></span>
+          </button>
           <div class="nav-divider"></div>
           <button class="nav-item" id="nav-about" data-view="settings">
             <svg class="icon"><use href="#i-settings" /></svg
@@ -178,7 +184,8 @@
             <button class="button secondary" id="add-demo">
               <svg class="icon"><use href="#i-spark" /></svg
               >Демо-обращения</button
-            ><button class="button primary" id="new-ticket">
+            ><button class="button secondary" id="feedback-open">Разметка правок</button>
+            <button class="button primary" id="new-ticket">
               <svg class="icon"><use href="#i-plus" /></svg>Новое обращение
             </button>
           </div>
@@ -366,6 +373,7 @@
                 <section class="private-chat" aria-labelledby="chat-heading">
                   <div class="section-heading"><h3 id="chat-heading">Личный чат по обращению</h3><span class="badge amber">Локальное демо</span></div>
                   <p class="section-description">Здесь пишет вошедший оператор. Сообщения игрока принимаются только через подписанный игровой коннектор. Доставка ответа пока имитируется.</p>
+                  <button id="duplicate-check" class="text-button" type="button">Похожие обращения</button><div id="duplicate-results" class="section-description"></div>
                   <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
                   <form id="chat-form"><label for="chat-text">Сообщение</label><textarea id="chat-text" maxlength="4000" rows="3" required placeholder="Напишите сообщение для обсуждения проблемы"></textarea><button class="button primary" type="submit">Сохранить сообщение</button></form>
                 </section>

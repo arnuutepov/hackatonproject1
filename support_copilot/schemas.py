@@ -82,6 +82,7 @@ class TriageResponse(ContractModel):
     reference_resolutions: list[ReferenceResolution] = Field(default_factory=list)
     draft_available: bool = False
     confidence_method: str = 'lexical_heuristic_uncalibrated'
+    confidence_level: Literal['low', 'medium', 'high'] = 'low'
     detected_topics: list[str] = Field(default_factory=list)
     safety_flags: list[str] = Field(default_factory=list)
     generation: GenerationStats = Field(default_factory=GenerationStats)
