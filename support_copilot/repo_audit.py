@@ -10,7 +10,7 @@ import sys
 DATA_PATH = re.compile(r'(^|/)(data|outputs|datasets|raw)/|(^|/)(rules|taxonomy)\.json$|'
                        r'\.(gz|zip|tgz|csv|parquet|xlsx|sqlite3?|db|arb|pkl)$|(^|/)\.env$')
 ALLOWED = {'examples/synthetic_tickets.jsonl', 'examples/wave3_synthetic.jsonl',
-           'examples/wave7_demo.jsonl', 'examples/wave7_new.jsonl'}
+           'examples/wave7_demo.jsonl', 'examples/wave7_new.jsonl', 'examples/submission-demo.jsonl'}
 SECRET = (r'sk-(proj-)?[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|'
           r'AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY|'
           r'OPENAI_API_KEY *= *[^ \n$]+')
