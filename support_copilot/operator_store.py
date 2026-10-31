@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import sqlite3
 import tempfile
 from uuid import uuid4
+
+from support_copilot.audit_chain import (
+    SCHEMA as CHAIN_SCHEMA, AuditChain, ChainConnection, digest, escalation_payload, timestamp, triage_payload)
 
 
 class MissingTicket(Exception):
@@ -31,20 +33,17 @@ class ConnectorRequired(Exception):
     pass
 
 
-def timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec='microseconds')
-
-
 class OperatorStore:
     def __init__(self, path: Path | str | None = None, *, actor='system'):
         self.actor = actor
         self.path = Path(path or os.environ.get('COPILOT_OPERATOR_DB') or (
             Path(__file__).resolve().parent.parent / 'outputs/operator/workspace.sqlite3'))
+        self.chain = AuditChain(self.path)
 
     @contextmanager
     def connect(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.path, timeout=10)
+        connection = sqlite3.connect(self.path, timeout=10, factory=ChainConnection)
         connection.row_factory = sqlite3.Row
         connection.execute('PRAGMA foreign_keys = ON')
         connection.executescript('''
@@ -91,10 +90,12 @@ class OperatorStore:
                 event_id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES tickets(id),
                 fingerprint TEXT NOT NULL
             );
-        ''')
+        ''' + CHAIN_SCHEMA)
         try:
             yield connection
             connection.commit()
+            if connection.chain_dirty:
+                self.chain.publish()
         except Exception:
             connection.rollback()
             raise
@@ -117,6 +118,10 @@ class OperatorStore:
         detail = {**detail, 'actor': self.actor}
         connection.execute('INSERT INTO events (ticket_id, kind, at, revision, detail) VALUES (?, ?, ?, ?, ?)',
                            (ticket_id, kind, timestamp(), revision, json.dumps(detail, ensure_ascii=False)))
+
+    def _record(self, connection, event_type, payload) -> int:
+        # Same transaction as the action: a block exists exactly when the action committed.
+        return self.chain.append(event_type, self.actor, payload, connection=connection).index
 
     def _create(self, connection, title, payload, source):
         ticket_id, now = str(uuid4()), timestamp()
@@ -191,6 +196,8 @@ class OperatorStore:
         for field in ('payload', 'analysis', 'knowledge_hashes'):
             result[field] = json.loads(result[field]) if result[field] else None
         result['events'] = [{**dict(event), 'detail': json.loads(event['detail'])} for event in events]
+        result['chain_block'] = next((event['detail']['chain_block'] for event in reversed(result['events'])
+                                      if 'chain_block' in event['detail']), None)
         result['needs_human'] = bool(result['analysis'] and (
             result['analysis']['needs_human'] or result['status'] == 'escalated') and
             not (result['status'] == 'resolved' and review))
@@ -261,10 +268,13 @@ class OperatorStore:
                            'revision = ?, updated_at = ?, analysis_ms = ?, knowledge_hashes = ? WHERE id = ?',
                            (json.dumps(analysis, ensure_ascii=False), analysis['draft_reply']['text'],
                             status, revision, timestamp(), duration_ms, json.dumps(hashes), ticket_id))
+        block = self._record(connection, 'triage.completed', triage_payload(json.loads(row['payload']), analysis, ticket_id))
+        if analysis['needs_human']:
+            self._record(connection, 'escalation.human', escalation_payload(analysis, ticket_id))
         self._event(connection, ticket_id, 'analyzed', revision, {
             'draft': analysis['draft_reply']['text'], 'needs_human': analysis['needs_human'],
             'provenance': analysis['draft_reply']['provenance'], 'knowledge_hashes': hashes,
-            'analysis_ms': duration_ms,
+            'analysis_ms': duration_ms, 'chain_block': block,
         })
 
     def inbox_replay(self, event_id: str, fingerprint: str) -> str | None:
@@ -291,6 +301,9 @@ class OperatorStore:
             ticket_id = self._create(connection, title, payload, source)
             connection.execute('INSERT INTO connector_inbox VALUES (?, ?, ?, ?, ?)',
                                (event_id, ticket_id, fingerprint, channel, json.dumps(context, ensure_ascii=False)))
+            if source == 'game_connector':
+                self._record(connection, 'game.event.accepted', {'event_id': event_id, 'event_hash': fingerprint,
+                                                                 'ticket_id': ticket_id})
             self._analyze(connection, ticket_id, 1, analysis, duration_ms, hashes)
             return ticket_id, False
 
@@ -329,7 +342,15 @@ class OperatorStore:
             if action == 'reply':
                 connection.execute('INSERT INTO chat_messages (ticket_id, role, text, created_at) VALUES (?, ?, ?, ?)',
                                    (ticket_id, 'admin', payload['draft'], event['at']))
-            self._event(connection, ticket_id, 'mock_' + action, revision, event)
+                block = self._record(connection, 'draft.sent', {
+                    'action_id': payload['action_id'], 'ticket_id': ticket_id, 'draft_hash': digest(payload['draft']),
+                    'player_id': context['player_id'], 'channel': payload['channel'], 'mode': 'mock', 'delivered': False,
+                    'server': (context.get('profile') or {}).get('server') or json.loads(row['analysis'])['extracted']['server']})
+            else:
+                block = self._record(connection, 'escalation.human', {
+                    'action_id': payload['action_id'], 'ticket_id': ticket_id, 'source': 'operator',
+                    'note_hash': digest(payload['note'])})
+            self._event(connection, ticket_id, 'mock_' + action, revision, {**event, 'chain_block': block})
             return event, False
 
     def outbox(self) -> list[dict]:
@@ -365,7 +386,10 @@ class OperatorStore:
             connection.execute('INSERT INTO chat_messages (ticket_id, role, text, created_at) VALUES (?, ?, ?, ?)',
                                (ticket_id, 'player', text, now))
             connection.execute('INSERT INTO game_messages VALUES (?, ?, ?)', (event_id, ticket_id, fingerprint))
-            self._event(connection, ticket_id, 'game_message', revision, {'role': 'player', 'event_id': event_id})
+            block = self._record(connection, 'game.event.accepted', {'event_id': event_id, 'event_hash': fingerprint,
+                                                                     'ticket_id': ticket_id})
+            self._event(connection, ticket_id, 'game_message', revision, {'role': 'player', 'event_id': event_id,
+                                                                          'chain_block': block})
             return False
 
     def export_mock_audit(self) -> dict:
@@ -406,7 +430,9 @@ class OperatorStore:
             status = 'escalated' if action == 'escalate' or row['status'] == 'escalated' else 'saved'
             connection.execute('UPDATE tickets SET edited_draft = ?, status = ?, revision = ?, '
                                'updated_at = ? WHERE id = ?', (draft, status, revision, timestamp(), ticket_id))
-            self._event(connection, ticket_id, 'escalated' if action == 'escalate' else 'saved', revision, {
-                'before': row['edited_draft'], 'draft': draft, 'note': note,
-                'needs_human': json.loads(row['analysis'])['needs_human'] or status == 'escalated',
-            })
+            detail = {'before': row['edited_draft'], 'draft': draft, 'note': note,
+                      'needs_human': json.loads(row['analysis'])['needs_human'] or status == 'escalated'}
+            if action == 'escalate':
+                detail['chain_block'] = self._record(connection, 'escalation.human', {
+                    'ticket_id': ticket_id, 'source': 'operator', 'note_hash': digest(note)})
+            self._event(connection, ticket_id, 'escalated' if action == 'escalate' else 'saved', revision, detail)

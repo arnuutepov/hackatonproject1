@@ -1,9 +1,14 @@
 """Shared inference entry point: Wave 2 analysis plus guarded Wave 3 drafts."""
+import logging
 import re
 import os
+import sqlite3
+from support_copilot.audit_chain import AuditChain, escalation_payload, triage_payload
 from support_copilot.knowledge import get_knowledge, normalize
 from support_copilot.schemas import DraftReply, Extracted, TriageRequest, TriageResponse
 from support_copilot.safety import assess, safety_view
+
+logger = logging.getLogger('uvicorn.error')
 
 # Transparent dev heuristics. Admin outcomes and control labels are not inputs.
 TOPICS = {
@@ -160,3 +165,20 @@ def triage(request: TriageRequest, *, draft_provider=None, use_configured_provid
             return result
     return add_draft(request, result, get_knowledge(), provider=draft_provider,
                      use_configured_provider=use_configured_provider)
+
+
+def record_triage(request: dict, analysis: dict, actor: str) -> None:
+    """Journal a stateless /triage answer. The chain records decisions and never gates them.
+
+    Ticket flows write their block inside the ticket transaction instead. Offline batches
+    (make predict, evaluations) take no action and stay out of the journal.
+    """
+    chain = AuditChain()
+    try:
+        with chain.connect() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            chain.append('triage.completed', actor, triage_payload(request, analysis), connection=connection)
+            if analysis['needs_human']:
+                chain.append('escalation.human', actor, escalation_payload(analysis), connection=connection)
+    except (sqlite3.Error, OSError, ValueError):
+        logger.warning('Audit chain unavailable: /triage answered without a block')

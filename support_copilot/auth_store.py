@@ -10,6 +10,8 @@ import time
 from threading import BoundedSemaphore
 from uuid import uuid4
 
+from support_copilot.audit_chain import AuditChain
+
 ROLES = frozenset({'agent', 'lead', 'admin'})
 SESSION_SECONDS = 8 * 60 * 60
 PASSWORD_SLOTS = BoundedSemaphore(2)
@@ -97,6 +99,8 @@ class AuthStore:
                        (key, username, encoded, role))
             db.execute('INSERT INTO identity_audit (at, actor, action, subject) VALUES (?, ?, ?, ?)',
                        (time.time(), actor, 'create_operator', key))
+            # Separate database: appended before this commit, so a chain failure rolls the action back.
+            AuditChain().append('operator.created', actor, {'id': key, 'role': role})
             return {'id': key, 'username': username, 'role': role, 'active': 1}
 
     def users(self) -> list[dict]:
@@ -117,6 +121,9 @@ class AuthStore:
             db.execute('DELETE FROM sessions WHERE operator_id = ?', (key,))
             db.execute('INSERT INTO identity_audit (at, actor, action, subject) VALUES (?, ?, ?, ?)',
                        (time.time(), actor, 'update_operator', key))
+            AuditChain().append('operator.role_change', actor, {
+                'id': key, 'role': role, 'active': bool(active),
+                'previous_role': row['role'], 'previous_active': bool(row['active'])})
 
     def reset_password(self, username: str, password: str):
         encoded = hash_password(password)
@@ -128,6 +135,7 @@ class AuthStore:
             db.execute('DELETE FROM sessions WHERE operator_id = ?', (row['id'],))
             db.execute('INSERT INTO identity_audit (at, actor, action, subject) VALUES (?, ?, ?, ?)',
                        (time.time(), 'local_cli', 'reset_password', row['id']))
+            AuditChain().append('operator.password_reset', 'local_cli', {'id': row['id']})
 
     def reserve_login(self, username: str, peer: str) -> bool:
         bucket = int(time.time() // 60)
@@ -168,6 +176,7 @@ class AuthStore:
             db.execute('INSERT INTO sessions VALUES (?, ?, ?)', (token_hash(token), row['id'], time.time() + SESSION_SECONDS))
             db.execute('INSERT INTO identity_audit (at, actor, action, subject) VALUES (?, ?, ?, ?)',
                        (time.time(), row['id'], 'login', row['id']))
+            AuditChain().append('operator.login', row['id'], {'id': row['id'], 'role': latest['role']})
         return token, self.public(latest)
 
     def session(self, token: str) -> dict | None:
@@ -180,7 +189,9 @@ class AuthStore:
 
     def logout(self, token: str, everywhere=False):
         with self.connect() as db:
-            row = db.execute('SELECT operator_id FROM sessions WHERE digest = ?', (token_hash(token),)).fetchone()
+            row = db.execute('SELECT sessions.operator_id, operators.role FROM sessions '
+                             'JOIN operators ON operators.id = sessions.operator_id WHERE digest = ?',
+                             (token_hash(token),)).fetchone()
             if row:
                 if everywhere:
                     db.execute('DELETE FROM sessions WHERE operator_id = ?', (row['operator_id'],))
@@ -188,6 +199,8 @@ class AuthStore:
                     db.execute('DELETE FROM sessions WHERE digest = ?', (token_hash(token),))
                 db.execute('INSERT INTO identity_audit (at, actor, action, subject) VALUES (?, ?, ?, ?)',
                            (time.time(), row['operator_id'], 'logout_all' if everywhere else 'logout', row['operator_id']))
+                AuditChain().append('operator.logout', row['operator_id'], {
+                    'id': row['operator_id'], 'role': row['role'], 'everywhere': everywhere})
 
     def consume_nonce(self, key_id: str, nonce: str, at: float) -> bool:
         with self.connect() as db:

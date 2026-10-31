@@ -6,12 +6,13 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from support_copilot.schemas import TriageRequest, TriageResponse
-from support_copilot.service import triage
+from support_copilot.service import record_triage, triage
 from support_copilot.knowledge import get_knowledge
 from support_copilot.operator import install_handlers, router as operator_router
 from support_copilot.connector import router as connector_router
 from support_copilot.security import SecurityMiddleware, operator, router as auth_router
 from support_copilot.game_ingestion import router as game_router
+from support_copilot.audit_api import router as audit_router
 
 app = FastAPI(title="Oguzki Support Copilot", version="0.10.0")
 STATIC = Path(__file__).with_name('static')
@@ -20,6 +21,7 @@ app.include_router(auth_router)
 app.include_router(game_router)
 app.include_router(operator_router)
 app.include_router(connector_router)
+app.include_router(audit_router)
 install_handlers(app)
 
 
@@ -71,5 +73,8 @@ def health() -> dict[str, str]:
 
 
 @app.post("/triage", response_model=TriageResponse)
-def triage_ticket(payload: TriageRequest) -> TriageResponse:
-    return triage(payload)
+def triage_ticket(payload: TriageRequest, request: Request) -> TriageResponse:
+    result = triage(payload)
+    principal = getattr(request.state, 'operator', None)
+    record_triage(payload.model_dump(), result.model_dump(), principal['id'] if principal else 'service')
+    return result

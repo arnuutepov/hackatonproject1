@@ -172,6 +172,9 @@ function renderHistory() {
     if (event.detail.note) item.append(node("p", "", event.detail.note));
     if (event.detail.needs_human)
       item.append(node("p", "", "Проверка человеком остаётся обязательной."));
+    if (event.detail.chain_block !== undefined)
+      item.append(button(`Записано в блок #${event.detail.chain_block} →`, "text-button", () =>
+        openChainBlock(event.detail.chain_block)));
     if (event.detail.draft !== undefined) {
       const details = node("details");
       details.append(
