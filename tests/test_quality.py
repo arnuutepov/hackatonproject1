@@ -24,6 +24,18 @@ def test_bootstrap_and_degenerate_kappa():
     with pytest.raises(ValueError):kappa([],[])
 
 
+def test_checked_rows_reads_utf8_independently_of_windows_codepage(tmp_path, monkeypatch):
+    import hashlib
+    import support_copilot.quality as quality
+    (tmp_path / 'evaluation').mkdir()
+    source = tmp_path / 'sample.jsonl'
+    source.write_text(json.dumps({'text': 'Қазақша oʻ'}, ensure_ascii=False) + '\n', encoding='utf-8')
+    manifest = [{'path': 'sample.jsonl', 'sha256': hashlib.sha256(source.read_bytes()).hexdigest()}]
+    (tmp_path / 'evaluation' / 'frozen-inputs.json').write_text(json.dumps(manifest), encoding='utf-8')
+    monkeypatch.setattr(quality, 'ROOT', tmp_path)
+    assert quality.checked_rows(source) == [{'text': 'Қазақша oʻ'}]
+
+
 def test_simhash_preserves_distinct_short_requests():
     assert simhash('Оплатил 100 рублей')==simhash('оплатил 100 РУБЛЕЙ!')
     assert not near_duplicate('помогите','помогите')

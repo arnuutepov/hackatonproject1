@@ -56,7 +56,7 @@ def checked_rows(path):
     for item in frozen:
         if hashlib.sha256((ROOT/item['path']).read_bytes()).hexdigest()!=item['sha256']:
             raise ValueError('Frozen source changed')
-    return [json.loads(line) for line in path.read_text().splitlines()]
+    return [json.loads(line) for line in path.read_text(encoding='utf-8-sig').splitlines()]
 
 
 def metrics(rows):
