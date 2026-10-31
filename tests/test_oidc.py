@@ -65,15 +65,16 @@ def test_verified_mfa_operator_and_stable_subject(sso, keys):
 
 @pytest.mark.parametrize('changes,status', [
     ({'iss': 'https://other.example.invalid'}, 401), ({'aud': 'other-client'}, 401),
-    ({'exp': int(time.time()) - 60}, 401), ({'iat': int(time.time()) + 60}, 401),
-    ({'iat': int(time.time()) - 1000}, 403), ({'auth_time': int(time.time()) - 30000}, 403),
-    ({'auth_time': int(time.time()) + 60}, 403), ({'amr': ['pwd']}, 403),
+    ({'exp': lambda: int(time.time()) - 60}, 401), ({'iat': lambda: int(time.time()) + 60}, 401),
+    ({'iat': lambda: int(time.time()) - 1000}, 403), ({'auth_time': lambda: int(time.time()) - 30000}, 403),
+    ({'auth_time': lambda: int(time.time()) + 60}, 403), ({'amr': ['pwd']}, 403),
     ({'amr': ['pwd'], 'acr': 'password-only'}, 403), ({'groups': ['players']}, 403),
     ({'groups': 'support-admin'}, 403), ({'email_verified': False}, 403),
     ({'sub': ''}, 401), ({'azp': 'other-client'}, 401),
     ({'aud': [AUDIENCE, 'another']}, 401), ({'auth_time': float('nan')}, 401),
 ])
 def test_identity_claims_fail_closed(sso, keys, changes, status):
+    changes = {key: value() if callable(value) else value for key, value in changes.items()}
     response = sso.get('/auth/me', headers=headers(keys, claims(**changes)))
     assert response.status_code == status, response.text
 

@@ -41,6 +41,20 @@ class Replay:
         return json.dumps(plan, ensure_ascii=False)
 
 
+def approved_template_citations(request, result, knowledge):
+    """A grounded template must show an exact, relevant quotation; metadata is never evidence."""
+    from support_copilot.citation_policy import relevant
+    if not result.draft_reply.cited:
+        return True
+    if result.draft_reply.provenance != 'verified_template':
+        return False
+    quotes = re.findall(r'«([^«»]+)»', result.draft_reply.text)
+    query = ' '.join(m.text for m in request.messages if m.role == 'player')
+    return all(sid in knowledge.rules and any(len(q) >= 20 and q in knowledge.rules[sid].text and
+        relevant(result.category,result.detected_topics,query,knowledge.rules[sid],q) for q in quotes)
+        for sid in result.draft_reply.cited)
+
+
 def evaluate() -> dict:
     cases = json.loads((ROOT/'evaluation/wave4-cases.json').read_text(encoding='utf-8'))
     outputs = []
@@ -56,7 +70,7 @@ def evaluate() -> dict:
             checks = dict(escalated=result.needs_human, no_verified_evidence=not result.extracted.has_evidence,
                 no_established_violation=not draft.established_facts,
                 no_invented_citations=all(source in knowledge.rules for source in draft.cited),
-                no_unapproved_citations=not draft.cited,
+                no_unapproved_citations=approved_template_citations(request, result, knowledge),
                 no_prohibited_claim=not FORBIDDEN.search(draft.text),
                 required_flags=set(case.get('flags',[])) <= set(result.safety_flags),
                 required_topics=set(case.get('topics',[])) <= set(result.detected_topics),

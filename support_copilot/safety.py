@@ -5,7 +5,7 @@ import unicodedata
 
 from support_copilot.schemas import TriageRequest
 
-_LATIN_TO_CYR = str.maketrans('aceopxy', 'асеорху')
+_LATIN_TO_CYR = str.maketrans('aceopxym', 'асеорхум')
 _CYR_TO_LATIN = str.maketrans('асеорху', 'aceopxy')
 
 
@@ -14,6 +14,8 @@ def safety_view(text: str) -> str:
     text = unicodedata.normalize('NFKC', text).casefold().replace('ё', 'е')
     text = ''.join(char for char in text if unicodedata.category(char) != 'Cf')
     text = text.translate(str.maketrans({char: "'" for char in 'ʻ’‘ʼ'}))
+    # Only a recognizable insult stem; do not rewrite arbitrary numbers/IDs.
+    text = re.sub(r'(?<!\w)0(?=скорб)', 'о', text)
     def confusable(match):
         word = match.group()
         cyr = len(re.findall(r'[а-я]', word))

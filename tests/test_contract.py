@@ -33,9 +33,6 @@ def test_baseline_does_not_claim_to_inspect_attachments_or_generate():
 
 
 @pytest.mark.parametrize("payload", [
-    {**PAYLOAD, "verdict": "approved"},
-    {**PAYLOAD, "punishment": "мут"},
-    {**PAYLOAD, "violation": "2.1"},
     {"kind": "report", "messages": [{"role": "admin", "text": "PRIVATE_ADMIN_TEXT"}]},
     {"kind": "invalid", "messages": PAYLOAD["messages"]},
     {"kind": "report", "messages": []},
@@ -46,6 +43,20 @@ def test_invalid_or_label_leaking_requests_rejected(payload):
     response = client.post("/triage", json=payload)
     assert response.status_code == 422
     assert "PRIVATE_ADMIN_TEXT" not in response.text
+
+
+@pytest.mark.parametrize('attachments', [None, 0, '2'])
+def test_input_metadata_is_ignored_and_attachment_counts_are_normalized(attachments):
+    payload = {'kind': 'report', 'verdict': 'PRIVATE_VERDICT', 'id': 'opaque',
+               'messages': [{'text': 'Помогите, игра вылетает', 'attachments': attachments,
+                             'punishment': 'PRIVATE_PUNISHMENT'}]}
+    request = TriageRequest.model_validate(payload)
+    assert request.messages[0].role == 'player'
+    assert request.messages[0].attachments == (int(attachments) if attachments is not None else 0)
+    assert 'PRIVATE_' not in request.model_dump_json()
+    response = client.post('/triage', json=payload)
+    assert response.status_code == 200
+    assert 'PRIVATE_' not in response.text
 
 
 def test_bad_batch_preserves_previous_output(tmp_path):

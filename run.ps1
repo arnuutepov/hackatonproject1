@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Serve', 'Test', 'Evaluate', 'DraftEvaluate', 'RegressionEvaluate', 'Measure', 'Benchmark', 'Predict', 'SubmissionCheck', 'AuditRepo', 'ChainVerify', 'ChainExport', 'ChainAnchor', 'ChainTamper', 'ChainBench')][string]$Mode = 'Serve',
+    [ValidateSet('Serve', 'ServeApi', 'Test', 'Evaluate', 'DraftEvaluate', 'RegressionEvaluate', 'Measure', 'Benchmark', 'Predict', 'SubmissionCheck', 'AuditRepo', 'Metrics', 'AIStatus', 'AICheck', 'ChainVerify', 'ChainExport', 'ChainAnchor', 'ChainTamper', 'ChainBench')][string]$Mode = 'Serve',
     [switch]$Install,
     [string]$PythonPath,
     [string]$EnvironmentPath = '.venv',
@@ -31,12 +31,16 @@ try {
     }
     $env:PYTHONUTF8 = '1'
     switch ($Mode) {
+        'ServeApi' { & $venvPython -m support_copilot.api_only }
         'Serve' { & $venvPython -m uvicorn support_copilot.api:app --host 127.0.0.1 --port 8000 --no-proxy-headers }
         'Test' { & $venvPython -m pytest -q --basetemp .test-temp }
         'Evaluate' { & $venvPython -m support_copilot.evaluate --output outputs/wave-2/dev-metrics.json }
         'DraftEvaluate' { & $venvPython -m support_copilot.evaluate_drafts --output outputs/wave-3/synthetic-safety.json }
         'RegressionEvaluate' { & $venvPython -m support_copilot.evaluate_regressions --output outputs/wave-4/regressions.json }
         'Measure' { & $venvPython -m support_copilot.measure --output outputs/wave-5 }
+        'Metrics' { & $venvPython -m support_copilot.project_metrics --http --output outputs/project-metrics }
+        'AIStatus' { & $venvPython -m support_copilot.ai_runtime }
+        'AICheck' { & $venvPython -m support_copilot.ai_runtime --check }
         'Benchmark' { & $venvPython -m support_copilot.benchmark --output outputs/wave-5/http-latency.json }
         'SubmissionCheck' { & $venvPython -m support_copilot.submission_check --output outputs/wave-7 }
         'AuditRepo' { git fetch --quiet --all; & $venvPython -m support_copilot.repo_audit }

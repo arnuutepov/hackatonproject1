@@ -1,5 +1,56 @@
 # Oguzki · Support Copilot
 
+**Для быстрого показа и сдачи:** [НАЧНИ-ЗДЕСЬ.md](НАЧНИ-ЗДЕСЬ.md).
+Windows: `START-MVP.cmd` запускает интерфейс, `TEST-MVP.cmd` проверяет HTTP/CLI
+без ключа. [Отчёт](ОТЧЁТ-ДЛЯ-СДАЧИ.md) · [Сценарий показа](ДЕМО-ДЛЯ-ЖЮРИ.md) ·
+[API и make predict](API-И-ПАКЕТНЫЙ-ЗАПУСК.md).
+
+[Отчёт о качестве и ограничениях](REPORT.md)
+
+[Текущий аудит ядра, Gemini и воспроизводимые метрики](docs/core-audit.md).
+Gemini работает в генераторе планов и чате оператора. Проверка настройки и
+живой проверочный запрос разделены; тарифный бюджет проверяется до генерации.
+Живой провайдер в последнем офлайн-прогоне не вызывался.
+
+Oguzki triages game-support requests and produces grounded drafts for operators.
+Use the template provider for offline processing. Put the organizer's rules and
+taxonomy into `data/handout-2026-10-27/`, then run the jury API or JSONL CLI.
+No game delivery is performed. The measured limits and sample provenance are
+described below; the category model is optional and not independently evaluated.
+
+## Быстрый старт API для жюри (Linux/macOS)
+
+Положите разрешённый архив организаторов в текущую папку. Архив содержит
+`handout/rules.json` и `handout/taxonomy.json`; команда извлекает только их.
+Python 3.13 и зависимости зафиксированы в lock-файле.
+
+```bash
+mkdir -p data/handout-2026-10-27
+tar -xzf grand-support-copilot-handout-2026-10-27.tgz -C data/handout-2026-10-27 --strip-components=1 handout/rules.json handout/taxonomy.json
+make install
+export COPILOT_TRIAGE_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+make serve-api &
+curl -s -X POST http://127.0.0.1:8000/triage -H "Authorization: Bearer $COPILOT_TRIAGE_TOKEN" -H 'Content-Type: application/json' -d '{"kind":"complaint","messages":[{"text":"Меня оскорбили на сервере 4"}]}'
+make predict IN=examples/wave7_demo.jsonl OUT=outputs/pred.jsonl
+```
+
+`serve-api` запускает только `/triage` и `/health` на loopback; оба требуют
+указанный токен. Нехватка токена или справочников останавливает запуск. Отсутствие
+`kind` трактуется как жалоба с обязательной проверкой человеком, неизвестное
+значение отклоняется; лишние поля игнорируются и не поступают в анализ.
+Пакетный `predict` не требует токена и сети в template-режиме. Экран оператора
+запускается отдельно через `make serve` и имеет другую настройку авторизации.
+
+Windows PowerShell: поместите два справочника в `data/handout-2026-10-27/`,
+затем выполните `./run.ps1 -Mode ServeApi -Install` после установки переменной
+`$env:COPILOT_TRIAGE_TOKEN`. В отдельном окне пакетный запуск:
+`./run.ps1 -Mode Predict -InputFile examples/wave7_demo.jsonl -OutputFile outputs/pred.jsonl`.
+
+Для экспериментального внешнего режима задайте через окружение
+`COPILOT_DRAFT_PROVIDER=responses`, `OPENAI_API_KEY` и `COPILOT_MODEL`. Качество,
+затраты и p95 живого провайдера в этой версии не подтверждены; приватные тексты
+не отправляйте внешнему провайдеру без отдельного согласования.
+
 Сервис триажа обращений игроков для кейса 03 Grand Mobile × Decentrathon 6.0.
 **Версия 0.11.0.** FastAPI, Python, SQLite, веб-панель оператора.
 По умолчанию работает локально на шаблонах, без внешней модели и её ключа.
@@ -124,7 +175,7 @@ curl --fail-with-body http://127.0.0.1:8000/triage \
 Подробности авторизации: [docs/security.md](docs/security.md).
 Windows-скрипт содержит отдельные режимы, например `./run.ps1 -Install`,
 `./run.ps1 -Mode Test` и `./run.ps1 -Mode SubmissionCheck`.
-Прохождение текущей версии на Windows/macOS не подтверждено.
+На Windows выполнен smoke-тест в чистом локальном клоне; macOS не проверена.
 
 ## Коннектор и демонстрация
 
@@ -160,12 +211,16 @@ API и сценарий показа: [docs/game-connector.md](docs/game-connect
 **≤ $0.002 за обращение не реализована**. Маскирование распознаваемых секретов,
 контактов и идентификаторов перед API не обеспечивает полной анонимности.
 
-## Проверенные результаты
+## Результаты предыдущей версии
+
+Текущие показатели после доработки классификатора: категория 76%, язык 94%
+на использованном при настройке dev. Подробности, интервалы и ограничения —
+в [REPORT.md](REPORT.md). Замороженный control после этих правок не пересчитывался.
 
 Повторная проверка **31.10.2026** в существующем окружении, Linux / Python 3.13.11, код `main` на
 [d21981e](https://github.com/BAITC-Hacks/hack-a4a36997-oguzki/commit/d21981e).
 `quality report` проверяет SHA-256 замороженных входов. Хеш Python-исходников
-пересчитанного отчёта совпал с текущим кодом:
+пересчитанного отчёта для той версии:
 `b27772928717d0e7a7f1ef53cd4b4977607680599bce2cfe4770dea618a964e6`.
 
 | Метрика | Dev: 100 человеческих меток | Control: 100 меток ассистента |
@@ -277,7 +332,7 @@ severity и confidence ≥ medium не сообщил находок; это н�
 персональных данных этим механизмом не обеспечивается.
 
 Главные пробелы: независимая оценка черновиков и носителями KK/UZ ещё не получена;
-категории — 57% на silver; уверенность не откалибрована; база игровых FAQ не
+категории — 76% на dev и исторически 57% на silver; уверенность не откалибрована; база игровых FAQ не
 подтверждена; автоматизация, реальная игровая доставка и бюджет внешней модели
 не доказаны. Следующий шаг — человеческая оценка и разбор ошибок, а не обещание
 полностью автоматической поддержки.

@@ -365,8 +365,10 @@
                   <div id="player-context-body"></div>
                 </details>
                 <section class="private-chat" aria-labelledby="assistant-heading">
-                  <div class="section-heading"><h3 id="assistant-heading">ИИ-помощник оператора</h3><span id="assistant-model" class="badge amber">Capybara</span></div>
-                  <p class="section-description">Советы по выбранному обращению. Ответы игроку не отправляются. Один вопрос — один вызов API.</p>
+                  <div class="section-heading"><h3 id="assistant-heading">ИИ-помощник оператора</h3><span id="assistant-model" class="badge amber">Проверка настройки…</span></div>
+                  <p class="section-description">Советы по выбранному обращению. Ответы игроку не отправляются.</p>
+                  <button id="assistant-check" class="button" type="button">Проверить связь с ИИ</button>
+                  <p id="assistant-status" class="section-description" aria-live="polite">Связь с провайдером ещё не проверена.</p>
                   <div id="assistant-messages" class="chat-messages" aria-live="polite"></div>
                   <form id="assistant-form"><label for="assistant-question">Вопрос помощнику</label><textarea id="assistant-question" maxlength="1200" rows="2" required placeholder="Что уточнить у игрока и почему нужна ручная проверка?"></textarea><button id="assistant-submit" class="button primary" type="submit">Спросить ИИ</button></form>
                 </section>

@@ -9,7 +9,7 @@ from support_copilot.citation_policy import STOP, relevant
 from support_copilot.draft_text import TEXT
 from support_copilot.knowledge import Knowledge
 from support_copilot.schemas import DraftReply, TriageRequest, TriageResponse
-from support_copilot.costing import configured_prices, estimate_cost
+from support_copilot.costing import provider_prices, estimate_cost
 
 CONTEXT_LIMITS = dict(messages=4,message_chars=800,rules=2,rule_chars=1000)
 
@@ -23,7 +23,8 @@ def capture_usage(result: TriageResponse,provider) -> None:
                        'input_tokens_details':{'cached_tokens':value.get('cached_tokens'),
                                                'cache_write_tokens':value.get('cache_write_tokens',0)}})
     result.generation.usage=usage
-    result.generation.api_cost_usd=estimate_cost(usage,getattr(provider,'response_model',None),configured_prices())
+    model = getattr(provider, 'response_model', None)
+    result.generation.api_cost_usd=estimate_cost(usage,model,provider_prices(model))
     if result.generation.api_cost_usd is not None:
         result.generation.cost_status='usage_pricing_estimate'
 

@@ -1,13 +1,14 @@
 """Read-only operator assistant. Its suggestions are never player messages or actions."""
 import json
+import os
 import threading
 from typing import Literal
 
 from fastapi import HTTPException
 from pydantic import Field, ValidationError
 from support_copilot.schemas import ContractModel, TriageRequest
-from support_copilot.draft_provider import Citation, DraftFailure
-from support_copilot.capybara_provider import configured_capybara
+from support_copilot.draft_provider import Citation, DraftFailure, configured_provider
+from support_copilot.costing import estimate_cost, provider_prices
 from support_copilot.drafting import build_context
 from support_copilot.service import triage
 from support_copilot.knowledge import get_knowledge
@@ -51,7 +52,10 @@ def answer(ticket, question):
     if not _SLOTS.acquire(blocking=False):
         raise HTTPException(429, 'Assistant busy')
     try:
-        provider = configured_capybara()
+        provider_name = os.environ.get('COPILOT_DRAFT_PROVIDER', 'template')
+        provider = configured_provider()
+        if provider is None or not callable(getattr(provider, 'complete', None)):
+            raise DraftFailure('draft_not_configured')
         # No second paid call to classify the ticket; keep the deterministic safety core.
         request = TriageRequest.model_validate(ticket['payload'])
         analysis = triage(request, use_configured_provider=False)
@@ -65,10 +69,11 @@ def answer(ticket, question):
                for c in result.citations):
             raise DraftFailure('draft_invalid_citation')
         reminder = '\n\nТребуется решение человека; совет ИИ не отменяет обязательную проверку.'
+        cost = estimate_cost(provider.last_usage, provider.response_model, provider_prices(provider.response_model))
         return {**result.model_dump(), 'answer': result.answer + (reminder if analysis.needs_human else ''),
-                'provider': 'capybara', 'model': provider.response_model,
-                'usage': provider.last_usage, 'cost_usd': None,
-                'cost_status': 'unmeasured_dynamic_third_party_price', 'advisory_only': True}
+                'provider': provider_name, 'model': provider.response_model,
+                'usage': provider.last_usage, 'cost_usd': cost,
+                'cost_status': 'usage_pricing_estimate' if cost is not None else 'unmeasured', 'advisory_only': True}
     except (DraftFailure, ValidationError):
         raise HTTPException(503, 'Assistant unavailable; retry later or use the verified draft') from None
     finally:

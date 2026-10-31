@@ -36,6 +36,10 @@ const REASONS = {
   taxonomy_is_draft: "Таксономия источника помечена как черновик.",
   human_review_required_no_personal_action:
     "Обстоятельства или действия по обращению требуют человека.",
+  movement_issue_requires_review:
+    "Техническая проблема с движением требует проверки специалистом.",
+  rule_question_requires_review:
+    "Не удалось подтвердить применимость проверенного правила.",
   insufficient_context_or_ambiguous_reference:
     "Недостаточно контекста либо ссылка на правило неоднозначна.",
   attachments_reported_not_inspected:
@@ -134,7 +138,8 @@ function setBusy(value) {
       ? "Повторить анализ"
       : "Проанализировать";
   $("workarea").setAttribute("aria-busy", String(value));
-  $("assistant-submit").disabled = value || config?.provider !== "capybara" || $("assistant-submit").dataset.pending === "true";
+  $("assistant-submit").disabled = value || !config?.ai?.assistant_configured || $("assistant-submit").dataset.pending === "true";
+  $("assistant-check").disabled = value || !config?.ai?.draft_configured || $("assistant-check").dataset.pending === "true";
   if (!value) {
     updateWorkflowActions();
     updatePagination();
@@ -287,7 +292,9 @@ function renderAnalysis() {
     ["Уверенность", ({low:"Низкая",medium:"Средняя",high:"Высокая"}[result.confidence_level] || "Низкая") + " · эвристика, не вероятность"],
     [
       "Маршрут",
-      current.needs_human ? "Требуется человек" : "Черновик для проверки",
+      current.needs_human ? "Требуется человек" :
+        result.reasons.includes('verified_template:rule_question_insult')
+          ? "Можно отправить после проверки" : "Черновик для проверки",
     ],
   ])
     summary.append(node("dt", "", label), node("dd", "", value));
@@ -525,15 +532,17 @@ async function start() {
       api("/tickets"),
     ]);
     config = settings;
-    $("assistant-model").textContent = config.provider === "capybara" ? `Capybara · ${config.assistant_model}` : "ИИ не подключён";
-    $("assistant-submit").disabled = config.provider !== "capybara";
+    $("assistant-model").textContent = config.ai?.draft_configured ? `${config.provider} · ${config.assistant_model}` : "ИИ не настроен";
+    $("assistant-status").textContent = config.ai?.draft_configured ? "Настройка есть; связь с ИИ ещё не проверена." : config.ai?.state === "configuration_error" ? "Проверьте ключ и настройки модели на сервере." : "Включён локальный шаблонный режим.";
+    $("assistant-submit").disabled = !config.ai?.assistant_configured;
+    $("assistant-check").disabled = !config.ai?.draft_configured;
     $("operator-name").textContent = config.operator.username;
     $("operator-role").textContent = config.operator.local_development ? "Явный режим разработки" : config.operator.role;
     tickets = queue.tickets;
     $("connection-dot").className = "status-dot online";
     $("connection-label").textContent = "Сервер подключён";
     $("about-provider").textContent =
-      ["responses", "capybara"].includes(config.provider)
+      ["responses", "capybara", "gemini"].includes(config.provider)
         ? "внешняя модель включена явно; запрос анализа может вызвать API."
         : "локальные шаблоны, внешняя модель выключена.";
     $("error-banner").hidden = true;
