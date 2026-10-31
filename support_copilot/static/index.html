@@ -11,7 +11,8 @@
     <script src="/assets/workspace.js" defer></script>
     <script src="/assets/connector-ui.js" defer></script>
     <script src="/assets/admin-views.js" defer></script>
-  </head>
+  <script src="/assets/assistant-ui.js" defer></script>
+</head>
   <body>
     <svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <symbol id="i-inbox" viewBox="0 0 24 24">
@@ -356,6 +357,12 @@
                   <summary id="player-context-title">Профиль игрока · MOCK</summary>
                   <div id="player-context-body"></div>
                 </details>
+                <section class="private-chat" aria-labelledby="assistant-heading">
+                  <div class="section-heading"><h3 id="assistant-heading">ИИ-помощник оператора</h3><span id="assistant-model" class="badge amber">Capybara</span></div>
+                  <p class="section-description">Советы по выбранному обращению. Ответы игроку не отправляются. Один вопрос — один вызов API.</p>
+                  <div id="assistant-messages" class="chat-messages" aria-live="polite"></div>
+                  <form id="assistant-form"><label for="assistant-question">Вопрос помощнику</label><textarea id="assistant-question" maxlength="1200" rows="2" required placeholder="Что уточнить у игрока и почему нужна ручная проверка?"></textarea><button id="assistant-submit" class="button primary" type="submit">Спросить ИИ</button></form>
+                </section>
                 <section class="private-chat" aria-labelledby="chat-heading">
                   <div class="section-heading"><h3 id="chat-heading">Личный чат по обращению</h3><span class="badge amber">Локальное демо</span></div>
                   <p class="section-description">Здесь пишет вошедший оператор. Сообщения игрока принимаются только через подписанный игровой коннектор. Доставка ответа пока имитируется.</p>

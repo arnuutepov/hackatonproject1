@@ -517,13 +517,15 @@ async function start() {
       api("/tickets"),
     ]);
     config = settings;
+    $("assistant-model").textContent = config.provider === "capybara" ? `Capybara · ${config.assistant_model}` : "ИИ не подключён";
+    $("assistant-submit").disabled = config.provider !== "capybara";
     $("operator-name").textContent = config.operator.username;
     $("operator-role").textContent = config.operator.local_development ? "Явный режим разработки" : config.operator.role;
     tickets = queue.tickets;
     $("connection-dot").className = "status-dot online";
     $("connection-label").textContent = "Сервер подключён";
     $("about-provider").textContent =
-      config.provider === "responses"
+      ["responses", "capybara"].includes(config.provider)
         ? "внешняя модель включена явно; запрос анализа может вызвать API."
         : "локальные шаблоны, внешняя модель выключена.";
     $("error-banner").hidden = true;
