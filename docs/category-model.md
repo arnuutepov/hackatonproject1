@@ -55,7 +55,7 @@ LogisticRegression не являются вероятностью правиль
 
 ## Формат данных
 
-Как в `DATA_CONTRACT.md`. Одна строка JSONL, поля строго:
+Одна строка JSONL, поля строго:
 `example_id, group_id, split (train|validation|test или отсутствует до разбиения), request,
 category, label_provenance, approved_for_training`. Лишние поля (`admin_reply`, `punishment`,
 `verdict` …) отклоняются. `request` проходит строгую `TriageRequest`, роль `admin` запрещена.

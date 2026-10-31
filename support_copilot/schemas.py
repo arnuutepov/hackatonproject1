@@ -1,7 +1,7 @@
 """HTTP inference contract. Training records require an explicit future adapter."""
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20000)]
 Language = Literal["ru", "kk", "uz", "en", "es", "pt", "und"]
@@ -12,13 +12,25 @@ class ContractModel(BaseModel):
 
 
 class Message(ContractModel):
-    role: Literal["player", "reported_player"]
+    model_config = ConfigDict(extra="ignore", strict=True)
+    role: Literal["player", "reported_player"] = "player"
     text: Text
     attachments: int = Field(default=0, ge=0)
 
+    @field_validator('attachments', mode='before')
+    @classmethod
+    def normalize_attachments(cls, value):
+        if value is None:
+            return 0
+        if isinstance(value, str) and value.isascii() and value.isdigit() and len(value) <= 9:
+            return int(value)
+        return value
+
 
 class TriageRequest(ContractModel):
-    kind: Literal["complaint", "report"]
+    model_config = ConfigDict(extra="ignore", strict=True)
+    # Missing kind is conservative: complaints require human review.
+    kind: Literal["complaint", "report"] = "complaint"
     messages: list[Message] = Field(min_length=1, max_length=100)
 
 

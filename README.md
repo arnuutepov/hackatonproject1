@@ -1,5 +1,41 @@
 # Oguzki · Support Copilot
 
+[Отчёт о качестве и ограничениях](REPORT.md)
+
+Oguzki triages game-support requests and produces grounded drafts for operators.
+Use the template provider for offline processing. Put the organizer's rules and
+taxonomy into `data/handout-2026-10-27/`, then run the jury API or JSONL CLI.
+No game delivery is performed. The measured limits and sample provenance are
+described below; the category model is optional and not independently evaluated.
+
+## Быстрый старт API для жюри (Linux/macOS)
+
+Положите разрешённый архив организаторов в текущую папку. Архив содержит
+`handout/rules.json` и `handout/taxonomy.json`; команда извлекает только их.
+Python 3.13 и зависимости зафиксированы в lock-файле.
+
+```bash
+mkdir -p data/handout-2026-10-27
+tar -xzf grand-support-copilot-handout-2026-10-27.tgz -C data/handout-2026-10-27 --strip-components=1 handout/rules.json handout/taxonomy.json
+make install
+export COPILOT_TRIAGE_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+make serve-api &
+curl -s -X POST http://127.0.0.1:8000/triage -H "Authorization: Bearer $COPILOT_TRIAGE_TOKEN" -H 'Content-Type: application/json' -d '{"kind":"complaint","messages":[{"text":"Меня оскорбили на сервере 4"}]}'
+make predict IN=examples/wave7_demo.jsonl OUT=outputs/pred.jsonl
+```
+
+`serve-api` запускает только `/triage` и `/health` на loopback; оба требуют
+указанный токен. Нехватка токена или справочников останавливает запуск. Отсутствие
+`kind` трактуется как жалоба с обязательной проверкой человеком, неизвестное
+значение отклоняется; лишние поля игнорируются и не поступают в анализ.
+Пакетный `predict` не требует токена и сети в template-режиме. Экран оператора
+запускается отдельно через `make serve` и имеет другую настройку авторизации.
+
+Для экспериментального внешнего режима задайте через окружение
+`COPILOT_DRAFT_PROVIDER=responses`, `OPENAI_API_KEY` и `COPILOT_MODEL`. Качество,
+затраты и p95 живого провайдера в этой версии не подтверждены; приватные тексты
+не отправляйте внешнему провайдеру без отдельного согласования.
+
 Кейс 03 Grand Mobile × Decentrathon 6.0 — ассистент поддержки и разбора жалоб.
 Команда Oguzki. Версия 0.11.0: персональные сессии, подписанный игровой вход и адаптер организационного OIDC/MFA.
 
@@ -180,7 +216,7 @@ COPILOT_CHAIN_TAMPER_DEMO=1 make chain-tamper
 |---|---|---|
 | Language accuracy | **94%, bootstrap 95% CI [89%; 98%]** (было 78%) | 100 human-dev, использован для настройки |
 | Language accuracy | 77%, CI [68%; 85%] | 100 assistant-silver control, не gold |
-| Category accuracy | 60% dev / 57% silver | Независимый gold ещё нужен |
+| Category accuracy | 71% dev (текущий прогон) | 100 human-dev, использован для настройки; CI 62–80%; независимый gold ещё нужен |
 | Эскалация precision / recall | **65% / 100%** dev; **69% / 100%** silver | Доля needs_human по-прежнему 100%; автоматизация не доказана |
 | Retrieval recall@5 / MRR | 1.0 / 1.0, hybrid и legacy | 7 synthetic-запросов; прирост не заявлен |
 | Gold packet / kappa | 40 кейсов / **pending** | Две независимые формы ещё не заполнены |
@@ -193,7 +229,8 @@ COPILOT_CHAIN_TAMPER_DEMO=1 make chain-tamper
 Silver-control — 100 обращений с предварительными метками ассистента. Это не
 слепой тест и не человеческий ground truth. Методика: [docs/wave-5.md](docs/wave-5.md).
 После исправлений Wave 7 метрики на той же замороженной выборке пересчитаны:
-категории 57%, язык 67%, macro-F1 приоритета 0.5324; значения не изменились.
+категории 57%, язык 67%, macro-F1 приоритета 0.5324 на прежнем детекторе Wave 7.
+Это историческое значение, не результат нынешнего детектора языка (77% выше).
 
 ## Ограничения
 

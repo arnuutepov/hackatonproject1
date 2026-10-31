@@ -49,6 +49,7 @@ TOPICS = {
 }
 # Russian case forms: «на сервере 4», «с сервера 12».
 SERVER = re.compile(r'(?:сервер(?:а|е|у|ом)?|server)\s*(?:№|#|:)?\s*(\d{1,3})\b', re.I)
+MOVEMENT_ISSUE = re.compile(r'\b(?:персонаж|герой|машина|транспорт)\w*\s+не\s+(?:двигается|движется|едет)\b')
 PATTERNS = {key: re.compile(value, re.I) for key, value in TOPICS.items()}
 
 # Category selection only. Topics above keep feeding priority, escalation and detected_topics unchanged
@@ -251,7 +252,9 @@ def analyze(request: TriageRequest) -> TriageResponse:
     incomplete = (bool(assessment.flags) or certainty == 0 or rules_certainty == 0 or lang == 'und' or transliterated
                   or any(item['status'] != 'resolved' for item in resolutions))
     mandatory_review = bool(reviewed & knowledge.human_always) or 'report.complaint' in reviewed
-    human = (bool(assessment.flags) or critical or mandatory_review or request.kind == 'complaint'
+    # Recognizing a movement failure is not a verified fix for it.
+    movement_review = bool(MOVEMENT_ISSUE.search(t))
+    human = (bool(assessment.flags) or critical or mandatory_review or movement_review or request.kind == 'complaint'
              or 'admin' in topics or incomplete)
     reasons = ['wave_2_lexical_baseline', 'confidence_is_uncalibrated', 'draft_generator_not_connected',
                'duplicate_scope_within_ticket']
@@ -259,6 +262,8 @@ def analyze(request: TriageRequest) -> TriageResponse:
         reasons.append('taxonomy_is_draft')
     if language_note:
         reasons.append(language_note)
+    if movement_review:
+        reasons.append('movement_issue_requires_review')
     if transliterated:
         reasons.append('transliterated_input_requires_review')
     if critical or mandatory_review or 'admin' in topics or request.kind == 'complaint':

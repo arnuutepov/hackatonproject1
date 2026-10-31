@@ -76,3 +76,12 @@ def test_remaining_defects_keep_original_and_human_review(text, kind, expected):
 def test_matching_view_does_not_rewrite_player_identifiers():
     from support_copilot.safety import safety_view
     assert safety_view('Ник Player_0123 и 0123') == 'ник player_0123 и 0123'
+
+
+@pytest.mark.parametrize('text', ['Персонаж не двигается после гаража', 'Машина не едет после загрузки'])
+def test_movement_problem_is_not_assumed_resolved(text):
+    request = TriageRequest.model_validate({'kind': 'report', 'messages': [{'text': text}]})
+    result = triage(request, use_configured_provider=False)
+    assert result.category == 'report.help'
+    assert result.needs_human
+    assert 'movement_issue_requires_review' in result.reasons

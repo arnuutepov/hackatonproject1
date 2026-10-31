@@ -10,6 +10,9 @@ install:
 serve:
 	$(PYTHON) -m uvicorn support_copilot.api:app --host 127.0.0.1 --port 8000 --no-proxy-headers
 
+serve-api:
+	$(PYTHON) -m support_copilot.api_only
+
 predict:
 	@test -n "$(IN)" -a -n "$(OUT)" || (echo 'Usage: make predict IN=tickets.jsonl OUT=pred.jsonl' >&2; exit 2)
 	$(PYTHON) -m support_copilot.cli --input "$(IN)" --output "$(OUT)"
