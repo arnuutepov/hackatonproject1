@@ -130,10 +130,13 @@ def choose_category(kind: str, text: str, topics: set[str]) -> tuple[str, float]
     offences = [topic for topic in OFFENCES if topic in topics and _affirmed(topic, text)]
     words = len(re.findall(r'[^\W\d_]+', text))
     if kind == 'report':
+        from support_copilot.rule_question import matches as matches_rule_question
         # Personal payment/account risks keep their mandatory categories first, unchanged.
         for topic in ('payment', 'account'):
             if topic in topics:
                 return 'report.' + topic, .65
+        if matches_rule_question(text):
+            return 'report.question', .65
         # Narrow generic question, not a contested sanction. Risk topics still
         # participate in escalation independently of the category.
         if SANCTION_DURATION_QUESTION.fullmatch(text):
@@ -307,11 +310,23 @@ def analyze(request: TriageRequest) -> TriageResponse:
 def triage(request: TriageRequest, *, draft_provider=None, use_configured_provider: bool = True,
            use_verified_templates: bool | None = None) -> TriageResponse:
     from support_copilot.drafting import add_draft
+    from support_copilot.rule_question import answer as answer_rule_question, matches as matches_rule_question
     result = analyze(request)
     result.reasons.remove('draft_generator_not_connected')
     # Explicitly injected providers exercise their path; normal API/CLI requests
     # can skip generation entirely for narrow, verified support workflows.
     templates = os.environ.get('COPILOT_VERIFIED_TEMPLATES','on') == 'on' if use_verified_templates is None else use_verified_templates
+    player_text = '\n'.join(message.text for message in request.messages if message.role == 'player')
+    if request.kind == 'report' and matches_rule_question(player_text):
+        approved = answer_rule_question(request, result, get_knowledge()) if templates and draft_provider is None else None
+        if approved is not None:
+            result.draft_reply = approved
+            result.draft_available = True
+            result.reasons.append('verified_template:rule_question_insult')
+            return result
+        # Never let a model downgrade an unverified version of this workflow.
+        result.needs_human = True
+        result.reasons.append('rule_question_requires_review')
     if draft_provider is None and templates:
         from support_copilot.verified_templates import match_template, reply
         template = match_template(request,result)

@@ -58,7 +58,9 @@ LogisticRegression не являются вероятностью правиль
 Одна строка JSONL, поля строго:
 `example_id, group_id, split (train|validation|test или отсутствует до разбиения), request,
 category, label_provenance, approved_for_training`. Лишние поля (`admin_reply`, `punishment`,
-`verdict` …) отклоняются. `request` проходит строгую `TriageRequest`, роль `admin` запрещена.
+`verdict` …) отклоняются на верхнем уровне обучающей записи. `request` проходит
+типовую проверку `TriageRequest`: вложенные лишние поля отбрасываются, роль
+`admin` запрещена и не может попасть в признаки.
 
 `label_provenance`: `human`, `human_adjudicated`, `assistant_silver`, `synthetic`,
 `feedback_unconfirmed`. Для обучения по умолчанию подходят только `human*` с

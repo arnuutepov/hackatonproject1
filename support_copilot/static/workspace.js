@@ -287,7 +287,9 @@ function renderAnalysis() {
     ["Уверенность", ({low:"Низкая",medium:"Средняя",high:"Высокая"}[result.confidence_level] || "Низкая") + " · эвристика, не вероятность"],
     [
       "Маршрут",
-      current.needs_human ? "Требуется человек" : "Черновик для проверки",
+      current.needs_human ? "Требуется человек" :
+        result.reasons.includes('verified_template:rule_question_insult')
+          ? "Можно отправить после проверки" : "Черновик для проверки",
     ],
   ])
     summary.append(node("dt", "", label), node("dd", "", value));
