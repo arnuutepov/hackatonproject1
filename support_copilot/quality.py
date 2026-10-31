@@ -143,7 +143,8 @@ def main():
     elif args.command=='score-gold':result=score_gold(args.packet,args.rater_a,args.rater_b)
     else:
         control=ROOT/'outputs/handout-2026-10-27/control-assistant/control.assistant.jsonl'
-        result={'implementation_sha256':implementation_hash(),'source_hashes':get_knowledge().hashes,
+        from support_copilot.category_model import backend_metadata
+        result={'implementation_sha256':implementation_hash(),'source_hashes':get_knowledge().hashes,'category_backend':backend_metadata(),
                 'dev':metrics(checked_rows(dev)),'control_silver':metrics(checked_rows(control)),
                 'retrieval':retrieval_metrics(),'gold_kappa':None,
                 'limitations':['Dev was used for tuning; bootstrap interval is conditional on this selected sample.',

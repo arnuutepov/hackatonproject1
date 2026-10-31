@@ -14,6 +14,7 @@ from support_copilot.draft_provider import MAX_OUTPUT_TOKENS
 from support_copilot.knowledge import get_knowledge
 from support_copilot.schemas import TriageRequest
 from support_copilot.service import triage
+from support_copilot.category_model import backend_metadata as category_backend_metadata
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTROL = 'outputs/handout-2026-10-27/control-assistant/control.assistant.jsonl'
@@ -85,6 +86,7 @@ def measure(output: Path) -> dict:
         labels_provenance='Codex assistant, provisional, requires independent human review; not a blind test',
         source_hashes={'control':sha(ROOT/CONTROL),**knowledge.hashes},
         code_version='wave5',implementation_sha256=implementation_hash(),python=platform.python_version(),platform=platform.platform(),
+        category_backend=category_backend_metadata(),
         category=classification_metrics([r['category'] for r in rows],[p.category for p in predictions],knowledge.categories),
         priority=classification_metrics([r['priority'] for r in rows],[p.priority for p in predictions],knowledge.priorities),
         language=classification_metrics([r['lang'] for r in rows],[p.lang for p in predictions],['ru','kk','uz','en','es','pt','und']),

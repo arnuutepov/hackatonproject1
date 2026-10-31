@@ -1,0 +1,7 @@
+# Offline category trainer only; install after requirements-dev.lock. Runtime inference needs none.
+# Versions exercised by the synthetic trainer tests (Linux, Python 3.13.18).
+scikit-learn==1.9.1
+numpy==2.5.3
+scipy==1.18.1
+joblib==1.6.0
+threadpoolctl==3.7.0

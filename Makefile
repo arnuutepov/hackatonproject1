@@ -1,5 +1,6 @@
 PYTHON ?= .venv/bin/python
 
+.PHONY: install-train category-validate category-splits category-train category-eval category-check
 .PHONY: install serve predict test eval-drafts eval-regressions measure benchmark submission-check audit-repo check audit-data prepare-data chain-verify chain-export chain-anchor chain-tamper chain-bench
 install:
 	python3 -m venv .venv
@@ -77,3 +78,27 @@ retention-preview:
 
 load-check:
 	$(PYTHON) -m support_copilot.benchmark --workers 8 --passes 3 --output outputs/roadmap/load.json
+
+# --- Opt-in local category model (docs/category-model.md). Data and models stay in outputs/. ---
+TAXONOMY ?= data/handout-2026-10-27/taxonomy.json
+install-train:
+	.venv/bin/python -m pip install -r requirements-train.lock
+
+category-validate:
+	@test -n "$(IN)" || (echo 'Usage: make category-validate IN=outputs/category-data/labels.jsonl' >&2; exit 2)
+	$(PYTHON) -m support_copilot.category_training validate --data "$(IN)" --taxonomy "$(TAXONOMY)"
+
+category-splits:
+	@test -n "$(IN)" -a -n "$(OUT)" || (echo 'Usage: make category-splits IN=unsplit.jsonl OUT=split.jsonl [SEED=20261031]' >&2; exit 2)
+	$(PYTHON) -m support_copilot.category_training assign-splits --data "$(IN)" --taxonomy "$(TAXONOMY)" --output "$(OUT)" $(if $(SEED),--seed $(SEED))
+
+category-train:
+	@test -n "$(IN)" -a -n "$(OUT)" || (echo 'Usage: make category-train IN=split.jsonl OUT=outputs/category-model/<run>' >&2; exit 2)
+	$(PYTHON) -m support_copilot.category_training train --data "$(IN)" --taxonomy "$(TAXONOMY)" --output "$(OUT)"
+
+category-eval:
+	@test -n "$(MODEL)" -a -n "$(IN)" -a -n "$(OUT)" || (echo 'Usage: make category-eval MODEL=.../model.json IN=split.jsonl OUT=report.json' >&2; exit 2)
+	$(PYTHON) -m support_copilot.category_training evaluate --model "$(MODEL)" --data "$(IN)" --taxonomy "$(TAXONOMY)" --output "$(OUT)"
+
+category-check:
+	$(PYTHON) -m support_copilot.category_model check $(if $(MODEL),--model "$(MODEL)")

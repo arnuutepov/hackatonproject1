@@ -11,6 +11,8 @@ dependencies = ["fastapi>=0.115,<1", "pydantic>=2,<3", "uvicorn>=0.30,<1", "PyJW
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "httpx>=0.27,<1", "PyYAML>=6,<7"]
+# Offline category trainer only (support_copilot.category_training); inference needs none of these.
+train = ["scikit-learn>=1.5,<2", "numpy>=1.26,<3", "scipy>=1.11,<2"]
 
 [project.scripts]
 copilot-predict = "support_copilot.cli:main"

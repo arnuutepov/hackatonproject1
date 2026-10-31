@@ -164,22 +164,59 @@ def choose_category(kind: str, text: str, topics: set[str]) -> tuple[str, float]
 
 
 from support_copilot.language_id import language
+from support_copilot import category_model
 
 
-def analyze(request: TriageRequest) -> TriageResponse:
-    knowledge = get_knowledge()
+def _rule_inputs(request: TriageRequest):
+    """Player text, independent safety assessment, matching view and detected topics."""
     # Reported player's quotes do not establish the reporter's intent.
     text = '\n'.join(message.text for message in request.messages if message.role == 'player')
     assessment = assess(request)
     t = safety_view(text)
-    lang, language_note = language(t)
     topics = {key for key in PATTERNS if next(_topic_matches(key, t), None) is not None}
     topics.update(assessment.topics)
+    return text, assessment, t, topics
+
+
+# Re-watching a recording is not an appeal; this mirrors the APPEAL rule's punishment-context requirement.
+REWATCH = re.compile(r'пересмотр\w*[^\n.!?]{0,40}(?:запис|видео|ролик|клип|повтор|момент)')
+
+
+def model_vetoes(t: str, topics: set[str]) -> dict[str, str]:
+    """Categories a learned model may not introduce where the rule core has a reviewed protection."""
+    vetoes = {}
+    if SOFTWARE_REQUEST.search(t) and 'cheat' not in topics:
+        vetoes['complaint.cheat'] = 'category_guard:ordinary_software_not_cheat'
+    if REWATCH.search(t) and not APPEAL.search(t) and 'admin' not in topics:
+        vetoes['complaint.admin'] = vetoes['report.complaint'] = 'category_guard:rewatch_not_appeal'
+    return vetoes
+
+
+def rule_category(request: TriageRequest) -> tuple[str, float, bool, dict[str, str]]:
+    """Rule-core category exactly as analyze() computes it, the appeal flag and model vetoes."""
+    _, _, t, topics = _rule_inputs(request)
+    category, certainty = choose_category(request.kind, t, topics)
+    return category, certainty, bool(APPEAL.search(t)), model_vetoes(t, topics)
+
+
+def analyze(request: TriageRequest) -> TriageResponse:
+    knowledge = get_knowledge()
+    text, assessment, t, topics = _rule_inputs(request)
+    lang, language_note = language(t)
     if assessment.flags & {'mixed_language_requires_review', 'suspected_kazakh_encoding'}:
         lang, language_note = 'und', None
-    category, certainty = choose_category(request.kind, t, topics)
-    if category not in knowledge.categories or knowledge.categories[category]['kind'] != request.kind:
-        raise ValueError('Category incompatible with taxonomy')
+    rules_category, rules_certainty = choose_category(request.kind, t, topics)
+    # Opt-in learned backend may replace the category only; the default 'rules' returns it unchanged.
+    decision = category_model.decide(request, rules_category, rules_certainty, appeal=bool(APPEAL.search(t)),
+                                     vetoes=model_vetoes(t, topics),
+                                     categories=knowledge.categories, human_always=knowledge.human_always,
+                                     taxonomy_sha256=knowledge.hashes.get('taxonomy'))
+    category, certainty = decision.category, decision.certainty
+    for code in {category, rules_category}:
+        if code not in knowledge.categories or knowledge.categories[code]['kind'] != request.kind:
+            raise ValueError('Category incompatible with taxonomy')
+    # Escalation never relies on the learned category alone: either category can require a human.
+    reviewed = {category, rules_category}
     critical = bool(topics & {'payment', 'account'}) or bool(re.search(
         r'массов[^\n]{0,100}баг|(?:все|всех)[^\n]{0,100}вылета|mass[^\n]{0,100}bug|угро[зж][^\n]{0,100}(?:жизн|реал)|убью[^\n]{0,100}(?:реал|жизн)|kill you[^\n]{0,100}real', t))
     if critical:
@@ -205,10 +242,11 @@ def analyze(request: TriageRequest) -> TriageResponse:
             references.append(alias.upper())
             resolutions.append(dict(reference=alias.upper(), status='ambiguous', candidates=knowledge.resolve(alias)))
     transliterated = language_note == 'language_transliterated_ru'
-    incomplete = (bool(assessment.flags) or certainty == 0 or lang == 'und' or transliterated
+    incomplete = (bool(assessment.flags) or certainty == 0 or rules_certainty == 0 or lang == 'und' or transliterated
                   or any(item['status'] != 'resolved' for item in resolutions))
-    human = (bool(assessment.flags) or critical or category in knowledge.human_always or request.kind == 'complaint'
-             or category == 'report.complaint' or 'admin' in topics or incomplete)
+    mandatory_review = bool(reviewed & knowledge.human_always) or 'report.complaint' in reviewed
+    human = (bool(assessment.flags) or critical or mandatory_review or request.kind == 'complaint'
+             or 'admin' in topics or incomplete)
     reasons = ['wave_2_lexical_baseline', 'confidence_is_uncalibrated', 'draft_generator_not_connected',
                'duplicate_scope_within_ticket']
     if knowledge.taxonomy.get('version', '').startswith('draft'):
@@ -217,10 +255,11 @@ def analyze(request: TriageRequest) -> TriageResponse:
         reasons.append(language_note)
     if transliterated:
         reasons.append('transliterated_input_requires_review')
-    if critical or category in knowledge.human_always or 'admin' in topics or request.kind == 'complaint' or category == 'report.complaint':
+    if critical or mandatory_review or 'admin' in topics or request.kind == 'complaint':
         reasons.append('human_review_required_no_personal_action')
     if incomplete:
         reasons.append('insufficient_context_or_ambiguous_reference')
+    reasons.extend(decision.reasons)
     reasons.extend(sorted(assessment.flags))
     attachments = sum(message.attachments for message in request.messages)
     if attachments:
@@ -250,6 +289,7 @@ def analyze(request: TriageRequest) -> TriageResponse:
         confidence_level='low' if incomplete or certainty < .4 else 'medium',
         retrieved_rules=knowledge.search(text), reference_resolutions=resolutions,
         detected_topics=sorted(topics), safety_flags=sorted(assessment.flags),
+        **({'confidence_method': decision.confidence_method} if decision.confidence_method else {}),
     )
 
 
