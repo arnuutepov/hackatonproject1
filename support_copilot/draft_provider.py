@@ -99,6 +99,8 @@ class ResponsesProvider:
 
     def generate(self, context: dict) -> str:
         self.last_usage, self.response_model = None, None
+        from support_copilot.privacy import redact_tree
+        context = redact_tree(context)
         body = {'model': self.model, 'store': False, 'max_output_tokens': MAX_OUTPUT_TOKENS,
                 'input': [{'role': 'system', 'content': SYSTEM},
                           {'role': 'user', 'content': json.dumps(context, ensure_ascii=False)}],

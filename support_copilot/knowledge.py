@@ -68,6 +68,9 @@ class Knowledge:
         self.words = {key: Counter(tokens(rule.section + ' ' + rule.text)) for key, rule in self.rules.items()}
         df = Counter(word for counts in self.words.values() for word in counts)
         self.idf = {word: math.log(1 + len(self.rules) / frequency) for word, frequency in df.items()}
+        self.lengths = {key: sum(counts.values()) for key, counts in self.words.items()}
+        self.avg_length = sum(self.lengths.values()) / max(1, len(self.lengths))
+        self.grams = {key: self.chargrams(rule.section + ' ' + rule.text) for key, rule in self.rules.items()}
         # Taxonomy references remain advisory, never unquestioned evidence.
         self.category_references = {
             code: {ref: self.resolve(ref) for ref in category.get('rules', [])}
@@ -85,12 +88,21 @@ class Knowledge:
         return [key for key, rule in self.rules.items()
                 if rule.ref == ref and (section_id is None or rule.section_id == section_id)]
 
-    def search(self, text: str, limit: int = 5) -> list[dict]:
+    @staticmethod
+    def chargrams(text):
+        text = re.sub(r'\s+', ' ', normalize(text))
+        return {text[i:i+3] for i in range(max(0, len(text)-2)) if text[i:i+3].strip()}
+
+    def search(self, text: str, limit: int = 5, *, mode='hybrid') -> list[dict]:
         expanded = normalize(text)
         for abbreviation, full in {'дм': 'убийство урон без причины', 'dm': 'убийство урон без причины',
                                    'гз': 'зеленая зона', 'gz': 'зеленая зона', 'зз': 'зеленая зона',
                                    'жб': 'жалобы', 'rmt': 'продажа реальные деньги'}.items():
             expanded = re.sub(r'\b' + abbreviation + r'\b', full, expanded)
+        if mode == 'hybrid':
+            for phrase, translation in {'haqorat': 'оскорбление', 'балағат': 'оскорбление',
+                                        'cheat': 'читы', 'aldadi': 'обман', 'алдап': 'обман'}.items():
+                expanded = expanded.replace(phrase, phrase + ' ' + translation)
         query = Counter(tokens(expanded))
         scored = []
         for key, counts in self.words.items():
@@ -100,6 +112,23 @@ class Knowledge:
             score = sum(self.idf[word] * (1 + math.log(counts[word])) for word in overlap)
             score /= 1 + .015 * sum(counts.values())
             scored.append((score, key))
+        if mode == 'hybrid' and query:
+            bm25 = []
+            for key, counts in self.words.items():
+                value = sum(self.idf[word] * counts[word] * 2.2 /
+                            (counts[word] + 1.2*(.25 + .75*self.lengths[key]/self.avg_length))
+                            for word in set(query) & counts.keys())
+                if value: bm25.append((value, key))
+            grams = self.chargrams(expanded)
+            lexical_ids = {key for _, key in bm25}
+            char = [(len(grams & doc) / math.sqrt(max(1, len(grams)*len(doc))), key)
+                    for key, doc in self.grams.items() if grams & doc]
+            char = [(score, key) for score, key in char if key in lexical_ids or score >= .25]
+            fused = Counter()
+            for ranking in (bm25, char):
+                for rank, (_, key) in enumerate(sorted(ranking, key=lambda x: (-x[0],x[1]))[:30], 1):
+                    fused[key] += 1/(60+rank)
+            scored = [(score, key) for key, score in fused.items()]
         results = []
         for score, key in sorted(scored, key=lambda item: (-item[0], item[1]))[:limit]:
             rule = self.rules[key]

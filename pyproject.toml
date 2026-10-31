@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oguzki-support-copilot"
-version = "0.10.0"
+version = "0.11.0"
 description = "Grand Mobile Support Copilot — authenticated operator workspace and signed game ingress"
 requires-python = ">=3.11"
 dependencies = ["fastapi>=0.115,<1", "pydantic>=2,<3", "uvicorn>=0.30,<1", "PyJWT[crypto]>=2.15.1,<3", "cryptography>=42,<51", "defusedxml>=0.7.1,<1"]
@@ -23,3 +23,4 @@ support_copilot = ["static/*.html", "static/*.css", "static/*.js", "static/*.svg
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["private_data: requires local organizer dictionaries; excluded from public CI"]

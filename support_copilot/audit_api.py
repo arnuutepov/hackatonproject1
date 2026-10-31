@@ -9,7 +9,11 @@ router = APIRouter(prefix='/audit', dependencies=[Depends(operator)])
 
 @router.get('/verify')
 def verify():
-    return AuditChain().verify()
+    from support_copilot.auth_store import AuthStore
+    report = AuditChain().verify()
+    with AuthStore().connect() as db:
+        report['identity_outbox_pending'] = db.execute('SELECT count(*) FROM identity_chain_outbox WHERE delivered=0').fetchone()[0]
+    return report
 
 
 @router.get('/blocks')

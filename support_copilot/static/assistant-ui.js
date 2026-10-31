@@ -12,6 +12,7 @@ assistantForm.addEventListener("submit", async (event) => {
   const submit = document.getElementById("assistant-submit");
   output.replaceChildren(node("p", "section-description", "Готовлю совет по обращению…"));
   submit.disabled = true;
+  submit.dataset.pending = "true";
   try {
     const result = await api(`/tickets/${ticketId}/assistant`, {method: "POST", body: JSON.stringify({expected_revision: current.revision, question, history: assistantHistory})});
     if (!current || current.id !== ticketId) return;
@@ -23,7 +24,7 @@ assistantForm.addEventListener("submit", async (event) => {
     output.append(node("p", "section-description", `${result.model || "Capybara"} · ${usage ? usage.input_tokens + usage.output_tokens + " токенов" : "расход не передан"} · стоимость уточняйте в кабинете`));
   } catch (error) {
     if (current?.id === ticketId) output.replaceChildren(node("p", "", "ИИ недоступен. Проверьте серверный ключ, баланс и доступность модели. Используйте проверенный черновик."));
-  } finally { submit.disabled = false; }
+  } finally { delete submit.dataset.pending; submit.disabled = config?.provider !== "capybara"; }
 });
 // Clear prior advice as soon as another ticket is shown.
 let assistantTicket = null;

@@ -30,6 +30,9 @@ EVENT_TYPES = frozenset({
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = ROOT / 'outputs/operator/workspace.sqlite3'
 SCHEMA = '''
+    CREATE TABLE IF NOT EXISTS chain_external_events (
+        event_id TEXT PRIMARY KEY, block_index INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS chain_blocks (
         idx INTEGER PRIMARY KEY, created_at TEXT NOT NULL, prev_hash TEXT NOT NULL,
         event_type TEXT NOT NULL, actor TEXT NOT NULL, payload_json TEXT NOT NULL,
@@ -163,6 +166,8 @@ class AuditChain:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(self.path, timeout=10, factory=ChainConnection)
         connection.row_factory = sqlite3.Row
+        connection.execute('PRAGMA journal_mode = WAL')
+        connection.execute('PRAGMA busy_timeout = 10000')
         connection.executescript(SCHEMA)
         try:
             yield connection
@@ -180,7 +185,7 @@ class AuditChain:
         return Block(*tuple(row))
 
     def _head(self, connection) -> Block | None:
-        row = connection.execute(f'SELECT {COLUMNS} FROM chain_blocks ORDER BY idx DESC LIMIT 1').fetchone()
+        row = connection.execute('SELECT idx, created_at, prev_hash, event_type, actor, payload_json, payload_digest, block_hash, signature FROM chain_blocks ORDER BY idx DESC LIMIT 1').fetchone()
         return self._block(row) if row else None
 
     def _insert(self, connection, index, prev_hash, created_at, event_type, actor, payload) -> Block:
@@ -189,7 +194,7 @@ class AuditChain:
         block_hash = header_hash(index, created_at, prev_hash, event_type, actor, payload_digest)
         block = Block(index, created_at, prev_hash, event_type, actor, payload_json, payload_digest,
                       block_hash, self.signer.sign(block_hash))
-        connection.execute(f'INSERT INTO chain_blocks ({COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        connection.execute('INSERT INTO chain_blocks (idx, created_at, prev_hash, event_type, actor, payload_json, payload_digest, block_hash, signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                            (block.index, block.created_at, block.prev_hash, block.event_type, block.actor,
                             block.payload_json, block.payload_digest, block.block_hash, block.signature))
         connection.chain_dirty = True
@@ -221,7 +226,7 @@ class AuditChain:
     def genesis(self) -> Block:
         with self.connect() as connection:
             connection.execute('BEGIN IMMEDIATE')
-            row = connection.execute(f'SELECT {COLUMNS} FROM chain_blocks WHERE idx = 0').fetchone()
+            row = connection.execute('SELECT idx, created_at, prev_hash, event_type, actor, payload_json, payload_digest, block_hash, signature FROM chain_blocks WHERE idx = 0').fetchone()
             return self._block(row) if row else self._genesis(connection)
 
     def append(self, event_type: str, actor: str, payload: dict, *, connection=None) -> Block:
@@ -236,13 +241,24 @@ class AuditChain:
             own.execute('BEGIN IMMEDIATE')
             return self._append(own, event_type, actor, payload)
 
+    def append_once(self, event_id, event_type, actor, payload):
+        """Idempotent bridge for committed events from a separate database."""
+        with self.connect() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            prior = connection.execute('SELECT block_index FROM chain_external_events WHERE event_id = ?', (event_id,)).fetchone()
+            if prior:
+                return prior['block_index']
+            block = self._append(connection, event_type, actor, {**payload, 'origin_event_id': event_id})
+            connection.execute('INSERT INTO chain_external_events VALUES (?, ?)', (event_id, block.index))
+            return block.index
+
     def head(self) -> Block | None:
         with self.connect() as connection:
             return self._head(connection)
 
     def blocks(self, *, limit: int = 50, before: int | None = None) -> list[Block]:
         with self.connect() as connection:
-            rows = connection.execute(f'SELECT {COLUMNS} FROM chain_blocks WHERE idx < ? ORDER BY idx DESC LIMIT ?',
+            rows = connection.execute('SELECT idx, created_at, prev_hash, event_type, actor, payload_json, payload_digest, block_hash, signature FROM chain_blocks WHERE idx < ? ORDER BY idx DESC LIMIT ?',
                                       (2**62 if before is None else before, limit)).fetchall()
         return [self._block(row) for row in rows]
 
@@ -266,7 +282,7 @@ class AuditChain:
                 size = target.stat().st_size if target.exists() else 0
                 known = MIRROR_TAIL.get(target)
                 last = known[1] if known and known[0] == size else self._mirror_tail(target)
-                rows = connection.execute(f'SELECT {COLUMNS} FROM chain_blocks WHERE idx > ? ORDER BY idx',
+                rows = connection.execute('SELECT idx, created_at, prev_hash, event_type, actor, payload_json, payload_digest, block_hash, signature FROM chain_blocks WHERE idx > ? ORDER BY idx',
                                           (last,)).fetchall()
                 if rows:
                     with open(target, 'ab') as stream:
@@ -302,7 +318,7 @@ class AuditChain:
         return json.loads(lines[-1])['index'] if lines else -1
 
     def _rows(self, connection) -> Iterable[Block]:
-        for row in connection.execute(f'SELECT {COLUMNS} FROM chain_blocks ORDER BY idx'):
+        for row in connection.execute('SELECT idx, created_at, prev_hash, event_type, actor, payload_json, payload_digest, block_hash, signature FROM chain_blocks ORDER BY idx'):
             yield self._block(row)
 
     def _configured_key(self):
@@ -368,7 +384,7 @@ class AuditChain:
             return {'status': 'absent', 'height': -1, 'failure': None}
         last, status = -1, 'match'
         with self.connect() as connection, open(target, encoding='utf-8', newline='\n') as stream:
-            rows = connection.execute(f'SELECT {COLUMNS} FROM chain_blocks ORDER BY idx')
+            rows = connection.execute('SELECT idx, created_at, prev_hash, event_type, actor, payload_json, payload_digest, block_hash, signature FROM chain_blocks ORDER BY idx')
             for line in stream:
                 try:
                     mirrored = json.loads(line)

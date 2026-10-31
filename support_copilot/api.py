@@ -14,7 +14,7 @@ from support_copilot.security import SecurityMiddleware, operator, router as aut
 from support_copilot.game_ingestion import router as game_router
 from support_copilot.audit_api import router as audit_router
 
-app = FastAPI(title="Oguzki Support Copilot", version="0.10.0")
+app = FastAPI(title="Oguzki Support Copilot", version="0.11.0")
 STATIC = Path(__file__).with_name('static')
 app.add_middleware(SecurityMiddleware)
 app.include_router(auth_router)

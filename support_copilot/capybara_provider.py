@@ -24,6 +24,8 @@ class CapybaraProvider:
 
     def complete(self, system, messages, schema, max_tokens=900):
         self.last_usage, self.response_model = None, None
+        from support_copilot.privacy import redact_tree
+        messages = redact_tree(messages)
         body = {'model': self.model, 'messages': [{'role': 'system', 'content': system}, *messages],
                 'max_tokens': max_tokens, 'stream': False,
                 'response_format': {'type': 'json_schema', 'json_schema': {'name': 'support_response',

@@ -14,7 +14,7 @@ from support_copilot.schemas import ContractModel, TriageRequest
 from support_copilot.service import triage
 
 
-from support_copilot.security import operator
+from support_copilot.security import operator, require_roles
 from support_copilot.operator_assistant import AssistantQuestion
 
 
@@ -66,6 +66,30 @@ def configuration(principal=Depends(operator)):
         'categories': {code: item['title'] for code, item in knowledge.categories.items()},
         'priorities': {code: item['title'] for code, item in knowledge.priorities.items()},
     }
+
+
+class FeedbackLabels(ContractModel):
+    category: str
+    priority: Literal['p0','p1','p2','p3']
+    lang: Literal['ru','kk','uz','en','es','pt','und']
+    needs_human: bool
+
+
+@router.get('/feedback')
+def feedback_queue(workspace: OperatorStore = Depends(store), principal=Depends(require_roles('lead','admin'))):
+    with workspace.connect() as db:
+        return {'items':[dict(r) for r in db.execute('SELECT id,ticket_id,revision,created_at,original_draft,edited_draft,labels,reviewer FROM operator_feedback ORDER BY id DESC LIMIT 100')]}
+
+
+@router.post('/feedback/{feedback_id}/approve')
+def feedback_approve(feedback_id: int, payload: FeedbackLabels, workspace: OperatorStore = Depends(store),
+                     principal=Depends(require_roles('lead','admin'))):
+    from support_copilot.feedback import approve
+    try:
+        approve(workspace,feedback_id,payload.model_dump(),principal['id'])
+    except ValueError:
+        raise HTTPException(422,'Feedback needs a second reviewer and valid taxonomy labels') from None
+    return {'approved':True,'automatic_training':False}
 
 
 @router.get('/tickets')
@@ -124,6 +148,11 @@ def decide(ticket_id: UUID, payload: Decision, workspace: OperatorStore = Depend
     key = ticket_key(ticket_id)
     workspace.decide(key, payload.expected_revision, payload.draft, payload.action, payload.note)
     return workspace.get(key)
+
+
+@router.get('/tickets/{ticket_id}/duplicates')
+def duplicates(ticket_id: UUID, workspace: OperatorStore = Depends(store)):
+    return {'candidates': workspace.duplicate_candidates(ticket_key(ticket_id)), 'auto_merged': False}
 
 
 @router.get('/rules/{source_id}')

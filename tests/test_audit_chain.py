@@ -551,7 +551,7 @@ def test_admin_actions_are_chained_and_only_admin_anchors(secured):
     assert anchor.json()['height'] == 4
     blocks = {block.event_type: block for block in AuditChain().blocks()}
     assert blocks['operator.created'].actor == admin['id']
-    assert blocks['operator.created'].payload() == {'id': created['id'], 'role': 'agent'}
+    assert {k:v for k,v in blocks['operator.created'].payload().items() if k != 'origin_event_id'} == {'id': created['id'], 'role': 'agent'}
     assert blocks['operator.role_change'].payload()['previous_role'] == 'agent'
     assert blocks['operator.role_change'].payload()['role'] == 'lead'
     assert blocks['operator.password_reset'].actor == 'local_cli'
@@ -559,12 +559,21 @@ def test_admin_actions_are_chained_and_only_admin_anchors(secured):
     assert secured.get('/audit/verify').json()['anchors']['status'] == 'match'
 
 
-def test_auth_action_rolls_back_when_the_chain_cannot_record_it(tmp_path, monkeypatch):
+def test_auth_outbox_survives_chain_failure_and_replays_once(tmp_path, monkeypatch):
     AuditChain().genesis()
     monkeypatch.setenv('COPILOT_CHAIN_PRIVATE_KEY', (b'\x33' * 32).hex())
-    with pytest.raises(ChainKeyMismatch):
-        AuthStore().create_user('blocked_user', PASSWORD, 'agent')
-    assert AuthStore().users() == []
+    created=AuthStore().create_user('pending_user', PASSWORD, 'agent')
+    assert created['id']
+    with AuthStore().connect() as db:
+        assert db.execute('SELECT count(*) FROM identity_chain_outbox WHERE delivered=0').fetchone()[0]==1
+    assert AuditChain().head().index==0
+    monkeypatch.delenv('COPILOT_CHAIN_PRIVATE_KEY')
+    AuthStore().users()  # Any later transaction retries committed outbox rows.
+    assert AuditChain().head().index==1
+    with AuthStore().connect() as db:
+        row=db.execute('SELECT * FROM identity_chain_outbox').fetchone()
+        AuditChain().append_once(row['event_id'],row['event_type'],row['actor'],__import__('json').loads(row['payload']))
+    assert AuditChain().head().index==1
 
 
 def test_signed_game_event_is_chained_with_its_hash(knowledge):

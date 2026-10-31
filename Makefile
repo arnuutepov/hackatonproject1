@@ -62,3 +62,18 @@ audit-data:
 prepare-data:
 	@test -n "$(IN)" -a -n "$(OUT)" || (echo 'Usage: make prepare-data IN=data/tickets_train.jsonl.gz OUT=outputs/wave1' >&2; exit 2)
 	$(PYTHON) -m support_copilot.dataset prepare --input "$(IN)" --output-dir "$(OUT)"
+
+quality-report:
+	$(PYTHON) -m support_copilot.quality report --output outputs/roadmap/quality.json
+
+gold-packet:
+	$(PYTHON) -m support_copilot.quality prepare-gold --output outputs/roadmap/gold-40
+
+feedback-export:
+	$(PYTHON) -m support_copilot.feedback --output outputs/roadmap/approved-feedback.jsonl
+
+retention-preview:
+	$(PYTHON) -m support_copilot.privacy --days 30
+
+load-check:
+	$(PYTHON) -m support_copilot.benchmark --workers 8 --passes 3 --output outputs/roadmap/load.json

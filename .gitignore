@@ -35,3 +35,7 @@ taxonomy.json
 .install-temp/
 .test-temp/
 .test-temp-*/
+
+# Local signing credentials and SQLite sidecars
+*.key
+*.pem

@@ -9,6 +9,7 @@ import sqlite3
 import tempfile
 from uuid import uuid4
 
+from support_copilot.feedback import SCHEMA as FEEDBACK_SCHEMA
 from support_copilot.audit_chain import (
     SCHEMA as CHAIN_SCHEMA, AuditChain, ChainConnection, digest, escalation_payload, timestamp, triage_payload)
 
@@ -45,6 +46,8 @@ class OperatorStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(self.path, timeout=10, factory=ChainConnection)
         connection.row_factory = sqlite3.Row
+        connection.execute('PRAGMA journal_mode = WAL')
+        connection.execute('PRAGMA busy_timeout = 10000')
         connection.execute('PRAGMA foreign_keys = ON')
         connection.executescript('''
             CREATE TABLE IF NOT EXISTS tickets (
@@ -90,7 +93,7 @@ class OperatorStore:
                 event_id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES tickets(id),
                 fingerprint TEXT NOT NULL
             );
-        ''' + CHAIN_SCHEMA)
+        ''' + CHAIN_SCHEMA + FEEDBACK_SCHEMA)
         try:
             yield connection
             connection.commit()
@@ -202,6 +205,16 @@ class OperatorStore:
             result['analysis']['needs_human'] or result['status'] == 'escalated') and
             not (result['status'] == 'resolved' and review))
         return result
+
+    def duplicate_candidates(self, ticket_id):
+        from support_copilot.dedup import near_duplicate
+        with self.connect() as db:
+            current = self._ticket(db, ticket_id)
+            payload = json.loads(current['payload'])
+            text = '\n'.join(m['text'] for m in payload['messages'] if m['role']=='player')
+            rows = db.execute('SELECT id, payload FROM tickets WHERE id != ? ORDER BY updated_at DESC LIMIT 500', (ticket_id,)).fetchall()
+        return [{'ticket_id': row['id'], 'status': 'candidate_requires_operator_review'} for row in rows
+                if near_duplicate(text, '\n'.join(m['text'] for m in json.loads(row['payload'])['messages'] if m['role']=='player'))][:10]
 
     def add_chat_message(self, ticket_id: str, expected_revision: int, role: str, text: str) -> None:
         with self.connect() as connection:
@@ -329,6 +342,8 @@ class OperatorStore:
             if action not in {'reply', 'escalate'}:
                 raise ValueError('Unknown mock action')
             revision = row['revision'] + 1
+            from support_copilot.feedback import record
+            record(connection, row, revision, self.actor, payload['draft'], timestamp())
             status = 'escalated' if action == 'escalate' or row['status'] == 'escalated' else 'reply_simulated'
             connection.execute('UPDATE tickets SET edited_draft = ?, status = ?, revision = ?, updated_at = ? WHERE id = ?',
                                (payload['draft'], status, revision, timestamp(), ticket_id))
@@ -427,6 +442,8 @@ class OperatorStore:
             if not row['analysis']:
                 raise AnalysisRequired()
             revision = expected_revision + 1
+            from support_copilot.feedback import record
+            record(connection, row, revision, self.actor, draft, timestamp())
             status = 'escalated' if action == 'escalate' or row['status'] == 'escalated' else 'saved'
             connection.execute('UPDATE tickets SET edited_draft = ?, status = ?, revision = ?, '
                                'updated_at = ? WHERE id = ?', (draft, status, revision, timestamp(), ticket_id))

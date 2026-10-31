@@ -28,30 +28,7 @@ SERVER = re.compile(r'(?:сервер(?:а|е|у|ом)?|server)\s*(?:№|#|:)?\s
 PATTERNS = {key: re.compile(value, re.I) for key, value in TOPICS.items()}
 
 
-def language(text: str) -> tuple[str, str | None]:
-    t = normalize(text)
-    if re.search(r'[їєґ]', t) or re.search(r'\b(будь ласка|мене|чому|гравець|мій|допоможіть)\b', t):
-        return 'und', 'recognized_uk_outside_contract'
-    if re.search(r'[ўҳ]', t):
-        return 'uz', None
-    if re.search(r'[әңөұүһі]', t) or re.search(r'\bқалай\b', t):
-        return 'kk', None
-    if re.search(r'[қғ]', t):
-        return 'und', 'language_shared_script_ambiguous'
-    if re.search(r'[ўқғҳ]', t) or re.search(r"\b(salom|yordam|menga|iltimos|qanday|qayer|nima|men|uchun|bilan|bering|yo[ʻ’']q)\b", t):
-        return 'uz', None
-    if re.search(r'[а-я]', t):
-        return 'ru', None
-    vocab = {
-        'en': {'hello', 'help', 'please', 'my', 'how', 'where', 'why', 'stuck', 'account', 'payment', 'player', 'hacked'},
-        'es': {'hola', 'ayuda', 'por', 'favor', 'cuenta', 'pago', 'gracias'},
-        'pt': {'ola', 'olá', 'ajuda', 'minha', 'conta', 'pagamento', 'obrigado'},
-    }
-    words = set(re.findall(r'[^\W\d_]+', t))
-    scores = sorted(((len(words & values), lang) for lang, values in vocab.items()), reverse=True)
-    if scores[0][0] and scores[0][0] > scores[1][0]:
-        return scores[0][1], None
-    return 'und', 'language_unknown_or_mixed'
+from support_copilot.language_id import language
 
 
 def analyze(request: TriageRequest) -> TriageResponse:
@@ -111,7 +88,7 @@ def analyze(request: TriageRequest) -> TriageResponse:
     human = (bool(assessment.flags) or critical or category in knowledge.human_always or request.kind == 'complaint'
              or category == 'report.complaint' or 'admin' in topics or incomplete)
     reasons = ['wave_2_lexical_baseline', 'confidence_is_uncalibrated', 'draft_generator_not_connected',
-               'duplicate_detection_not_implemented']
+               'duplicate_scope_within_ticket']
     if knowledge.taxonomy.get('version', '').startswith('draft'):
         reasons.append('taxonomy_is_draft')
     if language_note:
@@ -135,13 +112,18 @@ def analyze(request: TriageRequest) -> TriageResponse:
         'pt': 'O rascunho automático ainda não está disponível.',
         'und': 'Автоматический черновик пока недоступен.',
     }
+    from support_copilot.dedup import repeated_messages
+    duplicate = repeated_messages(request.messages)
+    if duplicate:
+        reasons.append('repeated_player_message_simhash')
     return TriageResponse(
-        lang=lang, category=category, priority=priority, is_spam_or_duplicate=False,
+        lang=lang, category=category, priority=priority, is_spam_or_duplicate=duplicate,
         extracted=Extracted(nickname=nickname.group() if nickname else None, rule_refs=references,
                             server=server.group(1) if server and 'conflicting_observable_fields' not in assessment.flags else None, attachments_claimed=attachments,
                             has_evidence=False),
         draft_reply=DraftReply(lang=lang, text=notices[lang]), needs_human=human,
         confidence=certainty if not incomplete else min(certainty, .25), reasons=reasons,
+        confidence_level='low' if incomplete or certainty < .4 else 'medium',
         retrieved_rules=knowledge.search(text), reference_resolutions=resolutions,
         detected_topics=sorted(topics), safety_flags=sorted(assessment.flags),
     )
