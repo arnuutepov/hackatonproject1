@@ -221,7 +221,7 @@ def test_busy_provider_returns_full_equal_http_cli_fallback(monkeypatch,tmp_path
     source.write_text(request.model_dump_json()+'\n',encoding='utf-8')
     try:
         predict(source,target)
-        response = TestClient(app).post('/triage',json=request.model_dump())
+        response = TestClient(app, client=('127.0.0.1', 40000), base_url='http://127.0.0.1').post('/triage',json=request.model_dump())
         assert response.status_code == 200
         assert response.json() == json.loads(target.read_text(encoding='utf-8'))
         assert response.json()['needs_human']

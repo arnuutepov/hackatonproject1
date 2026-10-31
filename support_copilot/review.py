@@ -10,7 +10,8 @@ import random
 import statistics
 import unicodedata
 import zipfile
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET
+from defusedxml.common import DefusedXmlException
 
 from support_copilot.measure import ROOT,CONTROL,load_control,sha
 from support_copilot.schemas import TriageRequest,TriageResponse
@@ -125,7 +126,10 @@ def read_xlsx(path: Path,sheet_name: str,headers: list[str]) -> list[dict]:
         def xml(name):
             if archive.getinfo(name).file_size>12_000_000:
                 raise ValueError('Review XML exceeds size limit')
-            return ET.fromstring(archive.read(name))
+            try:
+                return ET.fromstring(archive.read(name))
+            except DefusedXmlException:
+                raise ValueError('Unsafe XML in review workbook') from None
         book=xml('xl/workbook.xml')
         sheet=next((node for node in book.findall('m:sheets/m:sheet',ns) if node.attrib['name']==sheet_name),None)
         if sheet is None:

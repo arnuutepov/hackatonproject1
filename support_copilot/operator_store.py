@@ -36,7 +36,8 @@ def timestamp() -> str:
 
 
 class OperatorStore:
-    def __init__(self, path: Path | str | None = None):
+    def __init__(self, path: Path | str | None = None, *, actor='system'):
+        self.actor = actor
         self.path = Path(path or os.environ.get('COPILOT_OPERATOR_DB') or (
             Path(__file__).resolve().parent.parent / 'outputs/operator/workspace.sqlite3'))
 
@@ -82,6 +83,14 @@ class OperatorStore:
                 ticket_id TEXT NOT NULL REFERENCES tickets(id),
                 fingerprint TEXT NOT NULL, event TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS human_reviews (
+                ticket_id TEXT PRIMARY KEY REFERENCES tickets(id),
+                operator TEXT NOT NULL, note TEXT NOT NULL, at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS game_messages (
+                event_id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES tickets(id),
+                fingerprint TEXT NOT NULL
+            );
         ''')
         try:
             yield connection
@@ -104,8 +113,8 @@ class OperatorStore:
         if row['revision'] != expected_revision:
             raise RevisionConflict()
 
-    @staticmethod
-    def _event(connection, ticket_id, kind, revision, detail):
+    def _event(self, connection, ticket_id, kind, revision, detail):
+        detail = {**detail, 'actor': self.actor}
         connection.execute('INSERT INTO events (ticket_id, kind, at, revision, detail) VALUES (?, ?, ?, ?, ?)',
                            (ticket_id, kind, timestamp(), revision, json.dumps(detail, ensure_ascii=False)))
 
@@ -134,8 +143,10 @@ class OperatorStore:
     def list(self) -> list[dict]:
         with self.connect() as connection:
             rows = connection.execute('SELECT tickets.*, assignments.operator AS assigned_to, '
+                                      'human_reviews.operator AS reviewed_by, '
                                       'connector_inbox.context AS connector_context FROM tickets '
                                       'LEFT JOIN assignments ON tickets.id = assignments.ticket_id '
+                                      'LEFT JOIN human_reviews ON tickets.id = human_reviews.ticket_id '
                                       'LEFT JOIN connector_inbox ON tickets.id = connector_inbox.ticket_id '
                                       'ORDER BY created_at DESC, id DESC').fetchall()
         summaries = []
@@ -150,7 +161,8 @@ class OperatorStore:
                 'lang': analysis['lang'] if analysis else None,
                 'priority': analysis['priority'] if analysis else None,
                 'category': analysis['category'] if analysis else None,
-                'needs_human': (analysis['needs_human'] or row['status'] == 'escalated') if analysis else None,
+                'needs_human': ((analysis['needs_human'] or row['status'] == 'escalated') and
+                                not (row['status'] == 'resolved' and row['reviewed_by'])) if analysis else None,
                 'assigned_to': row['assigned_to'],
                 'mentioned_nickname': analysis['extracted']['nickname'] if analysis else None,
                 'player_id': json.loads(row['connector_context'])['player_id'] if row['connector_context'] else None,
@@ -163,13 +175,15 @@ class OperatorStore:
             events = connection.execute('SELECT kind, at, revision, detail FROM events '
                                         'WHERE ticket_id = ? ORDER BY id', (ticket_id,)).fetchall()
             assignment = connection.execute('SELECT operator FROM assignments WHERE ticket_id = ?', (ticket_id,)).fetchone()
+            review = connection.execute('SELECT operator, note, at FROM human_reviews WHERE ticket_id = ?', (ticket_id,)).fetchone()
             chat = connection.execute('SELECT id, role, text, created_at FROM chat_messages WHERE ticket_id = ? ORDER BY id', (ticket_id,)).fetchall()
             inbox = connection.execute('SELECT event_id, channel, context FROM connector_inbox WHERE ticket_id = ?',
                                        (ticket_id,)).fetchone()
             outbox = connection.execute('SELECT event FROM connector_outbox WHERE ticket_id = ? ORDER BY sequence',
                                         (ticket_id,)).fetchall()
         result = dict(row)
-        result['connector'] = ({'mode': 'mock', 'event_id': inbox['event_id'], 'channel': inbox['channel'],
+        result['human_review'] = dict(review) if review else None
+        result['connector'] = ({'mode': 'game' if row['source'] == 'game_connector' else 'mock', 'event_id': inbox['event_id'], 'channel': inbox['channel'],
                                 'context': json.loads(inbox['context'])} if inbox else None)
         result['outbox'] = [json.loads(item['event']) for item in outbox]
         result['chat_messages'] = [dict(message) for message in chat]
@@ -178,7 +192,8 @@ class OperatorStore:
             result[field] = json.loads(result[field]) if result[field] else None
         result['events'] = [{**dict(event), 'detail': json.loads(event['detail'])} for event in events]
         result['needs_human'] = bool(result['analysis'] and (
-            result['analysis']['needs_human'] or result['status'] == 'escalated'))
+            result['analysis']['needs_human'] or result['status'] == 'escalated') and
+            not (result['status'] == 'resolved' and review))
         return result
 
     def add_chat_message(self, ticket_id: str, expected_revision: int, role: str, text: str) -> None:
@@ -194,7 +209,8 @@ class OperatorStore:
                                (revision, now, ticket_id))
             self._event(connection, ticket_id, 'chat_message', revision, {'role': role})
 
-    def workflow(self, ticket_id: str, expected_revision: int, action: str) -> None:
+    def workflow(self, ticket_id: str, expected_revision: int, action: str,
+                 *, allow_human_resolution=False, note='') -> None:
         with self.connect() as connection:
             connection.execute('BEGIN IMMEDIATE')
             row = self._ticket(connection, ticket_id)
@@ -205,15 +221,19 @@ class OperatorStore:
                 if not analysis:
                     raise AnalysisRequired()
                 if analysis['needs_human'] or status == 'escalated':
-                    raise HumanReviewRequired()
+                    if not allow_human_resolution or not note.strip():
+                        raise HumanReviewRequired()
+                    connection.execute('INSERT OR REPLACE INTO human_reviews VALUES (?, ?, ?, ?)',
+                                       (ticket_id, self.actor, note, timestamp()))
                 status = 'resolved'
             elif action == 'reopen':
                 if status != 'resolved':
                     raise RevisionConflict()
                 status = 'analyzed'
+                connection.execute('DELETE FROM human_reviews WHERE ticket_id = ?', (ticket_id,))
             elif action == 'take':
                 connection.execute('INSERT OR REPLACE INTO assignments VALUES (?, ?)',
-                                   (ticket_id, 'local_operator'))
+                                   (ticket_id, self.actor))
             elif action == 'release':
                 connection.execute('DELETE FROM assignments WHERE ticket_id = ?', (ticket_id,))
             else:
@@ -221,7 +241,8 @@ class OperatorStore:
             revision = expected_revision + 1
             connection.execute('UPDATE tickets SET status = ?, revision = ?, updated_at = ? WHERE id = ?',
                                (status, revision, timestamp(), ticket_id))
-            self._event(connection, ticket_id, action, revision, {'local_only': True})
+            self._event(connection, ticket_id, action, revision, {'local_only': True, 'note': note,
+                         'manual_review_completed': action == 'resolve' and allow_human_resolution and bool(note.strip())})
 
     def analyze(self, ticket_id: str, expected_revision: int, analysis: dict,
                 duration_ms: float, hashes: dict) -> None:
@@ -230,6 +251,7 @@ class OperatorStore:
             self._analyze(connection, ticket_id, expected_revision, analysis, duration_ms, hashes)
 
     def _analyze(self, connection, ticket_id, expected_revision, analysis, duration_ms, hashes):
+        connection.execute('DELETE FROM human_reviews WHERE ticket_id = ?', (ticket_id,))
         row = self._ticket(connection, ticket_id)
         self._revision(row, expected_revision)
         revision = expected_revision + 1
@@ -260,13 +282,13 @@ class OperatorStore:
         return None
 
     def ingest(self, event_id: str, fingerprint: str, title: str, payload: dict, channel: str,
-               context: dict, analysis: dict, duration_ms: float, hashes: dict) -> tuple[str, bool]:
+               context: dict, analysis: dict, duration_ms: float, hashes: dict, *, source='mock_connector') -> tuple[str, bool]:
         with self.connect() as connection:
             connection.execute('BEGIN IMMEDIATE')
             existing = self._inbox_replay(connection, event_id, fingerprint)
             if existing:
                 return existing, True
-            ticket_id = self._create(connection, title, payload, 'mock_connector')
+            ticket_id = self._create(connection, title, payload, source)
             connection.execute('INSERT INTO connector_inbox VALUES (?, ?, ?, ?, ?)',
                                (event_id, ticket_id, fingerprint, channel, json.dumps(context, ensure_ascii=False)))
             self._analyze(connection, ticket_id, 1, analysis, duration_ms, hashes)
@@ -300,7 +322,7 @@ class OperatorStore:
             event = {'action_id': payload['action_id'], 'ticket_id': ticket_id, 'revision': revision,
                      'at': timestamp(), 'mode': 'mock', 'status': 'simulated', 'delivered': False,
                      'player_id': context['player_id'], 'channel': payload['channel'], 'action': action,
-                     'actor': 'local_operator', 'draft': payload['draft'], 'note': payload['note'],
+                     'actor': self.actor, 'draft': payload['draft'], 'note': payload['note'],
                      'needs_human': json.loads(row['analysis'])['needs_human'] or status == 'escalated'}
             connection.execute('INSERT INTO connector_outbox (action_id, ticket_id, fingerprint, event) VALUES (?, ?, ?, ?)',
                                (payload['action_id'], ticket_id, fingerprint, json.dumps(event, ensure_ascii=False)))
@@ -314,6 +336,37 @@ class OperatorStore:
         with self.connect() as connection:
             return [json.loads(row['event']) for row in connection.execute(
                 'SELECT event FROM connector_outbox ORDER BY sequence DESC LIMIT 100')]
+
+    def game_message(self, ticket_id, event_id, fingerprint, player_id, text):
+        with self.connect() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            existing = connection.execute('SELECT * FROM game_messages WHERE event_id = ?', (event_id,)).fetchone()
+            if existing:
+                if existing['ticket_id'] != ticket_id or existing['fingerprint'] != fingerprint:
+                    raise RevisionConflict()
+                return True
+            row = self._ticket(connection, ticket_id)
+            inbox = connection.execute('SELECT context FROM connector_inbox WHERE ticket_id = ?', (ticket_id,)).fetchone()
+            context = json.loads(inbox['context']) if inbox else {}
+            if (row['source'] != 'game_connector' or context.get('player_id') != player_id
+                    or context.get('server_actor') != self.actor):
+                raise ConnectorRequired()
+            payload = json.loads(row['payload'])
+            if len(payload['messages']) >= 100:
+                raise RevisionConflict()
+            payload['messages'].append({'role': 'player', 'text': text, 'attachments': 0})
+            revision = row['revision'] + 1
+            now = timestamp()
+            status = 'escalated' if row['status'] == 'escalated' else 'new'
+            connection.execute('UPDATE tickets SET payload = ?, analysis = NULL, edited_draft = NULL, '
+                               'status = ?, revision = ?, updated_at = ?, analysis_ms = NULL, knowledge_hashes = NULL WHERE id = ?',
+                               (json.dumps(payload, ensure_ascii=False), status, revision, now, ticket_id))
+            connection.execute('DELETE FROM human_reviews WHERE ticket_id = ?', (ticket_id,))
+            connection.execute('INSERT INTO chat_messages (ticket_id, role, text, created_at) VALUES (?, ?, ?, ?)',
+                               (ticket_id, 'player', text, now))
+            connection.execute('INSERT INTO game_messages VALUES (?, ?, ?)', (event_id, ticket_id, fingerprint))
+            self._event(connection, ticket_id, 'game_message', revision, {'role': 'player', 'event_id': event_id})
+            return False
 
     def export_mock_audit(self) -> dict:
         """Rebuild the JSONL projection atomically; SQLite is the authoritative audit.

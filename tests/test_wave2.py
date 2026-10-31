@@ -105,7 +105,7 @@ def test_http_cli_equal_across_topics(tmp_path):
     source.write_text('\n'.join(json.dumps(row) for row in rows), encoding='utf-8')
     predict(source, target)
     cli = [json.loads(row) for row in target.read_text(encoding='utf-8').splitlines()]
-    client = TestClient(app)
+    client = TestClient(app, client=('127.0.0.1', 40000), base_url='http://127.0.0.1')
     assert cli == [client.post('/triage', json=row).json() for row in rows]
 
 
@@ -129,6 +129,6 @@ def test_unavailable_knowledge_returns_json(monkeypatch):
     def broken():
         raise ValueError('PRIVATE_CONTENT')
     monkeypatch.setattr('support_copilot.api.get_knowledge', broken)
-    response = TestClient(app).get('/health')
+    response = TestClient(app, client=('127.0.0.1', 40000), base_url='http://127.0.0.1').get('/health')
     assert response.status_code == 503
     assert 'PRIVATE_CONTENT' not in response.text

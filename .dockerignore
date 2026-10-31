@@ -1,0 +1,13 @@
+**
+!deploy/
+!deploy/Dockerfile
+!requirements-dev.lock
+!pyproject.toml
+!README.md
+!support_copilot/
+!support_copilot/*.py
+!support_copilot/static/
+!support_copilot/static/*.html
+!support_copilot/static/*.css
+!support_copilot/static/*.js
+!support_copilot/static/*.svg

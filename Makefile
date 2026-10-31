@@ -7,7 +7,7 @@ install:
 	.venv/bin/python -m pip install --no-deps -e .
 
 serve:
-	$(PYTHON) -m uvicorn support_copilot.api:app --host 127.0.0.1 --port 8000
+	$(PYTHON) -m uvicorn support_copilot.api:app --host 127.0.0.1 --port 8000 --no-proxy-headers
 
 predict:
 	@test -n "$(IN)" -a -n "$(OUT)" || (echo 'Usage: make predict IN=tickets.jsonl OUT=pred.jsonl' >&2; exit 2)

@@ -1,7 +1,10 @@
 # Oguzki · Support Copilot
 
 Кейс 03 Grand Mobile × Decentrathon 6.0 — ассистент поддержки и разбора жалоб.
-Команда Oguzki. Версия 0.8.0: Wave 7 + локальный mock-коннектор.
+Команда Oguzki. Версия 0.10.0: персональные сессии, подписанный игровой вход и адаптер организационного OIDC/MFA.
+Конфигурация развёртывания: [docs/production-access.md](docs/production-access.md).
+Проверки безопасности и их границы: [docs/security-audit.md](docs/security-audit.md).
+SSO у провайдера, публичный сертификат, защита main и внешний пентест ещё требуют действий владельца; наличие конфигурации не означает их активацию.
 Отчёт о сдаче: [docs/wave-7.md](docs/wave-7.md). Коннектор: [docs/game-connector.md](docs/game-connector.md).
 
 ## Назначение
@@ -43,6 +46,7 @@ UI /operator ─┘                     safety: платежи, аккаунты
 | `evaluate*.py`, `measure.py`, `benchmark.py`, `review.py` | Метрики, регрессии, задержка, пакет человеческой оценки |
 | `submission_check.py`, `repo_audit.py` | Проверка сдачи и аудит Git (Wave 7) |
 | `connector.py`, `mock_provider.py` | Имитация входа из игры, вымышленные профили, исходящие действия через локальный outbox |
+| `security.py`, `auth_store.py`, `game_ingestion.py` | Защита всех HTTP-маршрутов, сессии и роли сотрудников, HMAC входящих игровых событий |
 
 ## Запуск
 
@@ -50,10 +54,19 @@ UI /operator ─┘                     safety: платежи, аккаунты
 
 ```bash
 make install                      # venv + зависимости из requirements-dev.lock
+.venv/bin/python -m support_copilot.manage_operators create --username arnur --role admin
+# Пароль задаётся интерактивно владельцем, минимум 15 символов; общего пароля нет.
+# Только для loopback HTTP на своей машине:
+export COPILOT_INSECURE_LOCAL_HTTP=1
 make serve                        # http://127.0.0.1:8000/  ·  Swagger: /docs
 make predict IN=examples/wave7_demo.jsonl OUT=outputs/pred.jsonl
 COPILOT_DRAFT_PROVIDER=template make check   # полная проверка перед сдачей
 ```
+
+По умолчанию панель и API требуют вход. Откройте `/auth/login` и войдите
+созданной учётной записью. Для HTTPS переменная `COPILOT_INSECURE_LOCAL_HTTP`
+не нужна. Сессии: HttpOnly, SameSite=Strict, Secure по умолчанию; запись через
+cookie требует Origin. Подробности, роли и установка: [docs/security.md](docs/security.md).
 
 Windows: `./run.ps1 -Install`, затем `./run.ps1` (сервер) или
 `./run.ps1 -Mode Test | RegressionEvaluate | DraftEvaluate | SubmissionCheck | AuditRepo`.
@@ -67,8 +80,14 @@ SQLite, консоль и файл-аудит; результат виден в�
 
 ```bash
 curl -X POST http://127.0.0.1:8000/triage -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $COPILOT_TRIAGE_TOKEN" \
   -d '{"kind":"complaint","messages":[{"role":"player","text":"Меня оскорбили на сервере 4","attachments":1}]}'
 ```
+
+Для этого машинного вызова задайте серверу и клиенту один случайный
+`COPILOT_TRIAGE_TOKEN` (32+ символа). Он разрешает только `/triage` и `/health`;
+это не токен оператора. Секрет не передавайте в URL или Git. Из браузера `/triage`
+доступен вошедшему оператору. CLI авторизацию HTTP не использует.
 
 `make predict`: одна строка входа — один запрос по контракту, одна строка выхода —
 ответ в том же порядке. Ошибка формата указывает номер строки и не портит прежний
@@ -99,10 +118,10 @@ OUT. HTTP и CLI вызывают одно ядро и дают одинаков
 | Пропуски обязательной передачи человеку | 0 из 69 | silver-control, Wave 5 |
 | Передано человеку | 100% | silver-control, Wave 5 |
 | Выдуманные пункты в цитатах | 0 | регрессии и control |
-| Тесты Python | 318/318 | Linux, включая 32 проверки коннектора |
+| Тесты Python | 389/389 | Linux: сессии, OIDC/MFA на синтетических токенах, конфигурация и настоящий uvicorn |
 | Синтетические регрессии безопасности | 270/270 и 133/133 | Wave 7, Linux |
 | Демо-сценарии | 5/5 | Wave 7, ядро, CLI и HTTP |
-| Локальный HTTP p95 | 4.23 мс (60 запросов) | `/triage`, последовательные запросы localhost, шаблоны; не нагрузочный тест коннектора |
+| Локальный HTTP p95 | 4.76 мс (60 запросов) | `/triage`, последовательные запросы localhost, шаблоны; не нагрузочный тест коннектора |
 | Стоимость API модели | $0 на обращение | шаблонный режим, модель не вызывается |
 
 Silver-control — 100 обращений с предварительными метками ассистента. Это не
@@ -119,7 +138,7 @@ Silver-control — 100 обращений с предварительными м
 - Человеческая оценка черновиков и носителями KK/UZ не проведена; в control один пример KK.
 - Семантической дедупликации обращений нет. Коннектор предотвращает лишь повторы
   одного события/действия по UUID. Вложения не просматриваются, реальной доставки
-  в игру и аутентификации нет.
+  в игру нет. Есть персональные сессии и роли операторов; SSO и MFA ещё не подключены.
   Локальный MVP: не выставлять в интернет.
 - Чистая установка, полный `make check` и пересчёт control выполнены на Linux
   (Python 3.13.11). macOS и Windows отдельно не проверялись;
@@ -134,3 +153,5 @@ Silver-control — 100 обращений с предварительными м
 [Wave 7 — сдача](docs/wave-7.md)
 
 [Mock game connector — API, демонстрация, outbox](docs/game-connector.md)
+
+[Защита, роли, установка оператора и HMAC](docs/security.md)

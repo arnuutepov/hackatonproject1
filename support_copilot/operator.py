@@ -14,20 +14,11 @@ from support_copilot.schemas import ContractModel, TriageRequest
 from support_copilot.service import triage
 
 
-def local_access(request: Request):
-    # No hosted identity yet: prevent accidental public exposure and DNS rebinding.
-    if request.url.hostname not in {'127.0.0.1', 'localhost', '::1'}:
-        raise HTTPException(403, 'Operator workspace is available on loopback hosts only')
-    if request.method not in {'GET', 'HEAD'}:
-        origin = request.headers.get('origin')
-        expected = f'{request.url.scheme}://{request.url.netloc}'
-        if origin is not None and origin != expected:
-            raise HTTPException(403, 'Cross-origin operator requests are not allowed')
-        if request.headers.get('sec-fetch-site') == 'cross-site':
-            raise HTTPException(403, 'Cross-site operator requests are not allowed')
+from support_copilot.security import operator
 
 
-router = APIRouter(prefix='/operator', dependencies=[Depends(local_access)])
+router = APIRouter(prefix='/operator', dependencies=[Depends(operator)])
+
 ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 
 
@@ -48,15 +39,15 @@ class Decision(AnalyzeTicket):
 
 class Workflow(AnalyzeTicket):
     action: Literal['take', 'release', 'resolve', 'reopen']
+    note: Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)] = ''
 
 
 class ChatMessage(AnalyzeTicket):
-    role: Literal['player', 'admin']
     text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
 
 
-def store() -> OperatorStore:
-    return OperatorStore()
+def store(principal=Depends(operator)) -> OperatorStore:
+    return OperatorStore(actor=principal['id'])
 
 
 def ticket_key(ticket_id: UUID) -> str:
@@ -64,10 +55,10 @@ def ticket_key(ticket_id: UUID) -> str:
 
 
 @router.get('/config')
-def configuration():
+def configuration(principal=Depends(operator)):
     knowledge = get_knowledge()
     return {
-        'mode': 'local_operator_workspace', 'delivery_available': False,
+        'mode': 'operator_workspace', 'delivery_available': False, 'operator': principal,
         'provider': 'responses' if os.environ.get('COPILOT_DRAFT_PROVIDER') == 'responses' else 'template',
         'taxonomy_version': knowledge.taxonomy['version'], 'knowledge_hashes': knowledge.hashes,
         'categories': {code: item['title'] for code, item in knowledge.categories.items()},
@@ -144,16 +135,20 @@ def rule(source_id: str):
 
 
 @router.post('/tickets/{ticket_id}/workflow')
-def workflow(ticket_id: UUID, payload: Workflow, workspace: OperatorStore = Depends(store)):
+def workflow(ticket_id: UUID, payload: Workflow, workspace: OperatorStore = Depends(store), principal=Depends(operator)):
     key = ticket_key(ticket_id)
-    workspace.workflow(key, payload.expected_revision, payload.action)
+    ticket = workspace.get(key)
+    senior = principal['role'] in {'lead', 'admin'}
+    if payload.action in {'take', 'release'} and ticket['assigned_to'] not in {None, principal['id']} and not senior:
+        raise HTTPException(403, 'Another operator owns this assignment')
+    workspace.workflow(key, payload.expected_revision, payload.action, allow_human_resolution=senior, note=payload.note)
     return workspace.get(key)
 
 
 @router.post('/tickets/{ticket_id}/chat')
 def chat_message(ticket_id: UUID, payload: ChatMessage, workspace: OperatorStore = Depends(store)):
     key = ticket_key(ticket_id)
-    workspace.add_chat_message(key, payload.expected_revision, payload.role, payload.text)
+    workspace.add_chat_message(key, payload.expected_revision, 'admin', payload.text)
     return workspace.get(key)
 
 

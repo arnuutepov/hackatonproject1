@@ -18,7 +18,7 @@ function renderConnector() {
       $("player-context").open = false;
     }
     const context = connector.context, profile = context.profile;
-    $("player-context-title").textContent = `MOCK · игрок ${context.player_id} · ${profile ? profile.nickname : "профиль не найден"}`;
+    $("player-context-title").textContent = `${connector.mode === "game" ? "GAME" : "MOCK"} · игрок ${context.player_id} · ${profile ? profile.nickname : "профиль не найден"}`;
     const body = $("player-context-body");
     body.replaceChildren(node("p", "section-description", context.notice));
     body.append(node("p", "section-description", `Снимок: ${dateTime(context.snapshot_at)} · ${context.provider}`));
@@ -39,7 +39,7 @@ function renderConnector() {
         body.append(item);
       }
       if (!profile.transactions.length) body.append(node("p", "section-description", "Тестовых транзакций нет."));
-    } else body.append(node("p", "section-description", "Для этого ID нет тестового профиля. Баланс и история неизвестны."));
+    } else body.append(node("p", "section-description", connector.mode === "game" ? "Профиль и транзакции игрового сервера не подключены." : "Для этого ID нет тестового профиля. Баланс и история неизвестны."));
   }
   for (const event of [...(current?.outbox || [])].reverse()) {
     const item = node("article", "history-event mock-event");

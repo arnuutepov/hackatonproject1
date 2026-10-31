@@ -13,7 +13,7 @@ from support_copilot.operator_store import OperatorStore, RevisionConflict
 def workspace(tmp_path, monkeypatch):
     path = tmp_path / 'workspace.sqlite3'
     monkeypatch.setenv('COPILOT_OPERATOR_DB', str(path))
-    with TestClient(app, base_url='http://127.0.0.1') as client:
+    with TestClient(app, client=('127.0.0.1', 40000), base_url='http://127.0.0.1') as client:
         yield client, path
 
 
@@ -71,7 +71,7 @@ def test_full_workflow_persists_original_edit_history_and_policy(workspace):
     # New store and new HTTP client read the same durable state.
     restored = OperatorStore(path).get(ticket['id'])
     assert restored == saved
-    with TestClient(app, base_url='http://127.0.0.1') as restarted:
+    with TestClient(app, client=('127.0.0.1', 40000), base_url='http://127.0.0.1') as restarted:
         assert restarted.get(f"/operator/tickets/{ticket['id']}").json() == saved
     assert [event['kind'] for event in restored['events']] == ['created', 'analyzed', 'saved']
     assert restored['events'][-1]['detail']['before'] == original

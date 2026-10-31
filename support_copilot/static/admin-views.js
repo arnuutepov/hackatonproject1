@@ -25,6 +25,7 @@ const eventNames = {
   release: "Назначение снято",
   resolve: "Завершено локально",
   reopen: "Открыто повторно",
+  game_message: "Сообщение игрока от подписанного сервера",
   mock_reply: "Ответ записан в MOCK OUTBOX",
   mock_escalate: "Эскалация записана в MOCK OUTBOX",
 };
@@ -256,7 +257,8 @@ function updateWorkflowActions() {
     ? "Снять назначение"
     : "Взять в работу";
   $("take-current").disabled = busy;
-  const blocked = !current.analysis || current.needs_human;
+  const senior = ["lead", "admin"].includes(config?.operator?.role);
+  const blocked = !current.analysis || (current.needs_human && !senior);
   $("resolve-current").textContent =
     current.status === "resolved" ? "Открыть повторно" : "Завершить";
   $("resolve-current").disabled =
@@ -267,7 +269,7 @@ function updateWorkflowActions() {
       : !current.analysis
         ? "Сначала выполните анализ обращения."
         : current.needs_human
-          ? "Нужна ручная проверка. Доступно сохранение правки и передача человеку."
+          ? (senior ? "Для завершения ручной проверки заполните комментарий к решению. Автор будет записан в историю." : "Нужна ручная проверка руководителем. Доступны сохранение и эскалация.")
           : "Завершение изменит только состояние локальной очереди.";
 }
 function setBackgroundInert(value) {
@@ -319,12 +321,20 @@ async function quickTake(t) {
   }
 }
 async function workflow(action) {
-  if (!current || busy || !canLeave()) return;
+  if (!current || busy) return;
+  const note = action === "resolve" ? noteValue.trim() : "";
+  if (action === "resolve" && current.needs_human && !note) {
+    setTab("result");
+    $("decision-note").focus();
+    notify("Заполните комментарий: что проверено и почему обращение можно завершить.");
+    return;
+  }
+  if (!canLeave()) return;
   setBusy(true);
   try {
     current = await api(`/tickets/${current.id}/workflow`, {
       method: "POST",
-      body: JSON.stringify({ expected_revision: current.revision, action }),
+      body: JSON.stringify({ expected_revision: current.revision, action, note }),
     });
     draftValue = current.edited_draft || "";
     noteValue = "";
@@ -593,12 +603,12 @@ function renderSettings() {
     node(
       "p",
       "",
-      "Профиль оператора локальный. Авторизация, игровые санкции и доставка ответов игрокам пока не подключены.",
+      "Сессия и роль проверяются сервером. Игровые санкции и реальная доставка ответов не подключены.",
     ),
     button("О системе и ограничениях", "button secondary", () =>
       $("about-dialog").showModal(),
     ),
-    button("Завершить сеанс", "text-button", pauseSession),
+    button("Завершить сеанс", "text-button", logoutSession),
   );
   return c;
 }
@@ -615,26 +625,15 @@ function renderSecondary() {
         : renderSettings(),
   );
 }
-function pauseSession() {
+async function logoutSession() {
   if (busy || !canLeave()) return;
-  info(
-    "Завершить локальный сеанс?",
-    [
-      "Сохранённые обращения останутся в базе. Несохранённые изменения будут отброшены. Экран паузы не является защитой паролем.",
-    ],
-    [
-      button("Завершить сеанс", "button primary", () => {
-        $("info-dialog").close();
-        dirty = false;
-        closeDetails();
-        current = null;
-        $("session-overlay").hidden = false;
-        $("resume-session").focus();
-        document.querySelector(".app-shell").inert = true;
-      }),
-    ],
-  );
+  try {
+    const result = await requestApi('/auth/logout', {method:'POST'});
+    dirty = false;
+    location.replace(result.redirect || '/auth/login');
+  } catch (error) { notify(errorText(error)); }
 }
+
 for (const b of document.querySelectorAll("[data-view]")) {
   b.setAttribute(
     "aria-label",
@@ -680,13 +679,7 @@ for (const id of ["ban-info", "mute-info"])
         "Сначала требуется подтверждение личности игрока, материалов и полномочий оператора. Для текущего обращения можно сохранить обоснование или отметить передачу человеку.",
       ],
     );
-$("logout").onclick = pauseSession;
-$("resume-session").onclick = () => {
-  $("session-overlay").hidden = true;
-  document.querySelector(".app-shell").inert = false;
-  start();
-  $("search").focus();
-};
+$("logout").onclick = logoutSession;
 $("reset-filters").onclick = resetFilters;
 $("sort-order").onchange = () => {
   admin.page = 0;
@@ -712,8 +705,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (
     (e.ctrlKey || e.metaKey) &&
-    e.key.toLowerCase() === "k" &&
-    $("session-overlay").hidden
+    e.key.toLowerCase() === "k"
   ) {
     e.preventDefault();
     navigate("reports");

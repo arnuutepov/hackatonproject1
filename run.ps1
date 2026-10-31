@@ -31,7 +31,7 @@ try {
     }
     $env:PYTHONUTF8 = '1'
     switch ($Mode) {
-        'Serve' { & $venvPython -m uvicorn support_copilot.api:app --host 127.0.0.1 --port 8000 }
+        'Serve' { & $venvPython -m uvicorn support_copilot.api:app --host 127.0.0.1 --port 8000 --no-proxy-headers }
         'Test' { & $venvPython -m pytest -q --basetemp .test-temp }
         'Evaluate' { & $venvPython -m support_copilot.evaluate --output outputs/wave-2/dev-metrics.json }
         'DraftEvaluate' { & $venvPython -m support_copilot.evaluate_drafts --output outputs/wave-3/synthetic-safety.json }

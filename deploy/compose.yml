@@ -1,0 +1,94 @@
+services:
+  edge:
+    image: ${CADDY_IMAGE:?Set a verified Caddy image digest}
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?Set the public domain}
+      ACME_EMAIL: ${ACME_EMAIL:?Set the ACME account email}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [front, backend]
+    depends_on: [sso, app]
+    security_opt: [no-new-privileges:true]
+  sso:
+    image: ${OAUTH2_PROXY_IMAGE:?Set a verified oauth2-proxy image digest}
+    restart: unless-stopped
+    command:
+      - --provider=oidc
+      - --http-address=0.0.0.0:4180
+      - --upstream=http://app:8000/
+      - --reverse-proxy=true
+      - --pass-authorization-header=true
+      - --pass-basic-auth=false
+      - --pass-user-headers=false
+      - --skip-auth-strip-headers=true
+      - --code-challenge-method=S256
+      - --insecure-oidc-skip-nonce=false
+      - --cookie-name=__Host-oguzki_sso
+      - --cookie-secure=true
+      - --cookie-httponly=true
+      - --cookie-samesite=lax
+      - --cookie-refresh=5m
+      - --cookie-expire=8h
+      - --scope=openid profile email groups
+      - --request-logging=false
+      - --auth-logging=false
+      - --client-secret-file=/run/secrets/oidc_client_secret
+      - --cookie-secret-file=/run/secrets/oidc_cookie_secret
+    environment:
+      OAUTH2_PROXY_OIDC_ISSUER_URL: ${OIDC_ISSUER:?Set organizational issuer}
+      OAUTH2_PROXY_CLIENT_ID: ${OIDC_CLIENT_ID:?Set registered client ID}
+      OAUTH2_PROXY_REDIRECT_URL: https://${PUBLIC_DOMAIN}/oauth2/callback
+      OAUTH2_PROXY_EMAIL_DOMAINS: ${OIDC_EMAIL_DOMAIN:?Set allowed organizational email domain}
+      OAUTH2_PROXY_ALLOWED_GROUPS: ${OIDC_ALLOWED_GROUPS:?Set allowed operator groups}
+      OAUTH2_PROXY_ACR_VALUES: ${OIDC_ACR_VALUES:?Set the provider MFA assurance request}
+    secrets: [oidc_client_secret, oidc_cookie_secret]
+    networks:
+      front: {}
+      backend:
+        ipv4_address: 172.30.67.2
+    depends_on: [app]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp]
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    environment:
+      COPILOT_AUTH_MODE: oidc
+      COPILOT_PUBLIC_ORIGIN: https://${PUBLIC_DOMAIN}
+      COPILOT_OIDC_ISSUER: ${OIDC_ISSUER}
+      COPILOT_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      COPILOT_OIDC_JWKS_URL: ${OIDC_JWKS_URL:?Set provider HTTPS JWKS endpoint}
+      COPILOT_OIDC_GROUP_ROLES: ${OIDC_GROUP_ROLES:?Set group-to-role JSON mapping}
+      COPILOT_OIDC_MFA_ACRS: ${OIDC_MFA_ACRS:?Set accepted MFA ACR values as JSON}
+      COPILOT_SSO_PROXY_CIDRS: 172.30.67.2/32
+      COPILOT_DRAFT_PROVIDER: template
+      COPILOT_AUTH_DB: /state/auth.sqlite3
+      COPILOT_OPERATOR_DB: /state/workspace.sqlite3
+    volumes:
+      - ${HANDOUT_DIR:?Set the local handout directory}:/app/data/handout-2026-10-27:ro
+      - app_state:/state
+    networks: [backend]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp]
+networks:
+  front: {}
+  backend:
+    ipam:
+      config: [{subnet: 172.30.67.0/24}]
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+  app_state: {}
+secrets:
+  oidc_client_secret:
+    file: ${OIDC_CLIENT_SECRET_FILE:?Set a local secret file path}
+  oidc_cookie_secret:
+    file: ${OIDC_COOKIE_SECRET_FILE:?Set a local raw 32-byte cookie secret file path}

@@ -13,17 +13,20 @@ from pathlib import Path
 import platform
 import re
 import socket
+import secrets
 import subprocess
 import sys
 import tempfile
 import time
+from support_copilot.local_http import open_local
 from urllib.error import URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 ROOT = Path(__file__).resolve().parents[1]
 DEMO = ROOT / 'examples/wave7_demo.jsonl'
 DEFAULT_INPUTS = [DEMO, ROOT / 'examples/wave7_new.jsonl', ROOT / 'examples/wave3_synthetic.jsonl',
                   ROOT / 'examples/synthetic_tickets.jsonl']
+SERVICE_TOKEN = secrets.token_urlsafe(32)
 P95_LIMIT_MS = 5000
 COST_LIMIT_USD = 0.002
 FORBIDDEN = re.compile(r'накажем|наказан[аоы]? будет|верн[её]м деньги|разбаним|мы проверили скриншот|'
@@ -77,7 +80,7 @@ def percentile(values, quantile=.95):
 
 def offline_env() -> dict:
     return {**os.environ, 'COPILOT_DRAFT_PROVIDER': 'template', 'COPILOT_VERIFIED_TEMPLATES': 'on',
-            'PYTHONUTF8': '1'}
+            'PYTHONUTF8': '1', 'COPILOT_AUTH_MODE': 'required', 'COPILOT_TRIAGE_TOKEN': SERVICE_TOKEN}
 
 
 def source_status() -> dict:
@@ -126,13 +129,13 @@ def start_server():
         port = sock.getsockname()[1]
     started = time.perf_counter()
     process = subprocess.Popen([sys.executable, '-m', 'uvicorn', 'support_copilot.api:app', '--host', '127.0.0.1',
-                                '--port', str(port), '--no-access-log'], cwd=ROOT, env=offline_env(),
+                                '--port', str(port), '--no-access-log', '--no-proxy-headers'], cwd=ROOT, env=offline_env(),
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
     base = f'http://127.0.0.1:{port}'
     while True:
         try:
-            with urlopen(base + '/health', timeout=1) as response:
+            with open_local(Request(base + '/health', headers={'Authorization': 'Bearer ' + SERVICE_TOKEN}), timeout=1) as response:
                 health = json.load(response)
             return process, base, health, (time.perf_counter() - started) * 1000
         except (URLError, TimeoutError, ConnectionError):
@@ -145,7 +148,7 @@ def start_server():
 def post(base: str, path: str, payload: bytes, content_type='application/json'):
     start = time.perf_counter()
     try:
-        with urlopen(Request(base + path, data=payload, headers={'Content-Type': content_type}), timeout=10) as response:
+        with open_local(Request(base + path, data=payload, headers={'Content-Type': content_type, 'Authorization': 'Bearer ' + SERVICE_TOKEN}), timeout=10) as response:
             status, body = response.status, json.load(response)
     except Exception as exc:  # urllib raises HTTPError for 4xx
         status, body = getattr(exc, 'code', None), json.loads(exc.read()) if hasattr(exc, 'read') else None
