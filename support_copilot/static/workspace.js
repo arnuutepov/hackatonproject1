@@ -7,6 +7,7 @@ const STATUS = {
   saved: "Сохранено",
   escalated: "Передано человеку",
   resolved: "Завершено",
+  reply_simulated: "Ответ · MOCK",
 };
 const LANG = {
   ru: "Русский",
@@ -52,6 +53,8 @@ const REASONS = {
     "В сообщениях противоречат извлекаемые сведения.",
   prompt_injection_suspected:
     "Обнаружена возможная попытка подменить инструкции.",
+  instruction_override_attempt:
+    "Попытка подменить инструкции: указания из сообщения игрока не исполняются.",
 };
 let config = null,
   tickets = [],
@@ -147,7 +150,7 @@ function renderQueue() {
 
 function setTab(tab) {
   activeTab = tab;
-  for (const name of ["result", "history"]) {
+  for (const name of ["result", "history", "outbox"]) {
     $(`tab-${name}`).classList.toggle("active", name === tab);
     $(`tab-${name}`).setAttribute("aria-selected", String(name === tab));
     $(`tab-${name}`).tabIndex = name === tab ? 0 : -1;
@@ -396,7 +399,7 @@ function renderTicket() {
   $("ticket-short-id").textContent = `#${shortId(current.id)}`;
   $("case-title").textContent = current.title;
   $("case-meta").textContent =
-    `${dateTime(current.created_at)} · версия ${current.revision} · ${current.source === "demo" ? "Вымышленный пример" : "Добавлено оператором"}`;
+    `${dateTime(current.created_at)} · версия ${current.revision} · ${current.connector ? "Тестовый коннектор · MOCK" : current.source === "demo" ? "Вымышленный пример" : "Добавлено оператором"}`;
   $("case-labels").replaceChildren(
     badge(current.payload.kind === "complaint" ? "Жалоба" : "Репорт"),
     badge(STATUS[current.status], statusKind(current.status)),
@@ -470,6 +473,7 @@ function renderTicket() {
     : "Проанализировать";
   renderAnalysis();
   renderHistory();
+  renderConnector();
   setTab(activeTab);
 }
 
@@ -597,6 +601,10 @@ async function saveDecision(action) {
   if (!draftValue.trim()) {
     $("draft").focus();
     notify("Черновик не должен быть пустым.");
+    return;
+  }
+  if (action === "escalate" && current.connector) {
+    await performMockAction("escalate");
     return;
   }
   setBusy(true);
@@ -733,18 +741,18 @@ $("copy-draft").addEventListener("click", async () => {
 });
 $("tab-result").addEventListener("click", () => setTab("result"));
 $("tab-history").addEventListener("click", () => setTab("history"));
-for (const name of ["result", "history"])
+$("tab-outbox").addEventListener("click", () => setTab("outbox"));
+for (const name of ["result", "history", "outbox"])
   $(`tab-${name}`).addEventListener("keydown", (event) => {
     if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
       event.preventDefault();
+      const tabs = ["result", "history", "outbox"];
       const next =
         event.key === "Home"
           ? "result"
           : event.key === "End"
-            ? "history"
-            : activeTab === "result"
-              ? "history"
-              : "result";
+            ? "outbox"
+            : tabs[(tabs.indexOf(activeTab) + (event.key === "ArrowLeft" ? 2 : 1)) % tabs.length];
       setTab(next);
       $(`tab-${next}`).focus();
     }

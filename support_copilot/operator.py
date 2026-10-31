@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import Field, StringConstraints
 
 from support_copilot.knowledge import get_knowledge
-from support_copilot.operator_store import AnalysisRequired, HumanReviewRequired, MissingTicket, OperatorStore, RevisionConflict
+from support_copilot.operator_store import AnalysisRequired, ConnectorRequired, HumanReviewRequired, MissingTicket, OperatorStore, RevisionConflict
 from support_copilot.schemas import ContractModel, TriageRequest
 from support_copilot.service import triage
 
@@ -158,6 +158,11 @@ def chat_message(ticket_id: UUID, payload: ChatMessage, workspace: OperatorStore
 
 
 def install_handlers(app):
+    @app.exception_handler(ConnectorRequired)
+    async def connector_required(request, exc):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=409, content={'detail': 'Create the ticket through the mock connector first'})
+
     @app.exception_handler(HumanReviewRequired)
     async def human_required(request, exc):
         from fastapi.responses import JSONResponse

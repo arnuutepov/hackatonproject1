@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/assets/workspace.css" />
     <script src="/assets/api-client.js" defer></script>
     <script src="/assets/workspace.js" defer></script>
+    <script src="/assets/connector-ui.js" defer></script>
     <script src="/assets/admin-views.js" defer></script>
   </head>
   <body>
@@ -96,7 +97,7 @@
         >
         <div class="workspace-name">
           <span class="tiny-square"></span>AREA ADMIN PANEL
-          <span class="version-label">06</span>
+          <span class="version-label">08</span>
         </div>
         <div class="nav-label">WORKSPACE</div>
         <nav>
@@ -172,6 +173,7 @@
             <p id="page-description">Каждое решение начинается с фактов.</p>
           </div>
           <div class="heading-actions">
+            <button class="button secondary" id="simulate-ticket">Загрузить тестовый кейс</button>
             <button class="button secondary" id="add-demo">
               <svg class="icon"><use href="#i-spark" /></svg
               >Демо-обращения</button
@@ -219,6 +221,7 @@
                 <option value="analyzed">Разобраны</option>
                 <option value="needs_human">Нужен человек</option>
                 <option value="saved">Сохранены</option>
+                <option value="reply_simulated">Ответы · MOCK</option>
                 <option value="escalated">Переданы человеку</option>
                 <option value="resolved">Завершены</option></select
               ><select id="filter-priority" aria-label="Приоритет">
@@ -304,7 +307,7 @@
             ><span
               >Помощник готовит черновик. Окончательное решение принимает
               администратор.</span
-            ><span>OGUZKI / WAVE 06</span>
+            ><span>OGUZKI / MOCK CONNECTOR</span>
           </div>
         </section>
         <section class="view" id="secondary-view" hidden></section>
@@ -349,6 +352,10 @@
                 <h2 id="case-title"></h2>
                 <p class="case-meta" id="case-meta"></p>
                 <div id="messages" class="messages"></div>
+                <details id="player-context" class="mock-context" hidden>
+                  <summary id="player-context-title">Профиль игрока · MOCK</summary>
+                  <div id="player-context-body"></div>
+                </details>
                 <section class="private-chat" aria-labelledby="chat-heading">
                   <div class="section-heading"><h3 id="chat-heading">Личный чат по обращению</h3><span class="badge amber">Локальное демо</span></div>
                   <p class="section-description">Переписка сохраняется на этом компьютере. Вход игроков и доставка сообщений ещё не подключены.</p>
@@ -388,7 +395,7 @@
               <div
                 class="tabs"
                 role="tablist"
-                aria-label="Результат или история"
+                aria-label="Разбор обращения"
               >
                 <button
                   id="tab-result"
@@ -407,6 +414,7 @@
                 >
                   История правок <span id="history-count">0</span>
                 </button>
+                <button id="tab-outbox" class="tab" role="tab" aria-selected="false" aria-controls="outbox-panel" tabindex="-1">Доставка · MOCK</button>
               </div>
               <div
                 id="result-panel"
@@ -490,6 +498,12 @@
                         </svg>
                       </button>
                     </div>
+                    <div id="mock-send-controls" class="mock-send-controls" hidden>
+                      <label for="outbound-channel">Канал имитации</label>
+                      <select id="outbound-channel"><option value="game_chat">Чат игры · MOCK</option><option value="telegram">Telegram · MOCK</option></select>
+                      <button id="mock-send" class="button primary">Отправить ответ · MOCK</button>
+                      <p class="section-description">Запись в локальный outbox. Реальной доставки нет; обязательная проверка человеком сохраняется.</p>
+                    </div>
                     <p class="delivery-note">
                       Сохраняется решение оператора. Отправки игроку и действий
                       в игре нет.
@@ -510,6 +524,12 @@
                   часовом поясе браузера.
                 </p>
                 <div id="history-list"></div>
+              </div>
+              <div id="outbox-panel" role="tabpanel" aria-labelledby="tab-outbox" class="history-panel" hidden>
+                <p class="section-description">Имитация отправок. Игра, Telegram и ClickHouse не подключены.</p>
+                <p id="audit-status" class="section-description" aria-live="polite"></p>
+                <button id="refresh-outbox" class="text-button">Обновить журнал / повторить запись файла</button>
+                <div id="mock-outbox-list"></div>
               </div>
             </aside>
           </div>
@@ -535,6 +555,22 @@
         </aside>
       </main>
     </div>
+    <dialog id="simulate-dialog" class="dialog" aria-labelledby="simulate-title">
+      <form id="simulate-form">
+        <div class="dialog-heading"><div><span class="eyebrow">GAME CONNECTOR · MOCK</span><h2 id="simulate-title">Тестовое обращение</h2></div><button type="button" class="icon-button" data-close="simulate-dialog" aria-label="Закрыть">×</button></div>
+        <p class="section-description">Вымышленные профили и транзакции. Кейс сразу попадёт в очередь с готовым разбором. Внешняя модель не вызывается.</p>
+        <label for="simulate-scenario">Сценарий</label><select id="simulate-scenario" required></select>
+        <div id="simulate-custom" hidden>
+          <label for="simulate-player">ID игрока</label><input id="simulate-player" type="number" min="1" max="9007199254740991" step="1" placeholder="777123" />
+          <label for="simulate-case-title">Заголовок</label><input id="simulate-case-title" maxlength="120" />
+          <label for="simulate-kind">Тип обращения</label><select id="simulate-kind"><option value="report">Репорт</option><option value="complaint">Жалоба</option></select>
+          <label for="simulate-message">Сообщение игрока</label><textarea id="simulate-message" maxlength="20000" rows="4"></textarea>
+        </div>
+        <label for="simulate-channel">Источник обращения</label><select id="simulate-channel"><option value="game_chat">Чат игры · MOCK</option><option value="telegram">Telegram · MOCK</option></select>
+        <p id="simulate-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-footer"><button type="button" class="button secondary" data-close="simulate-dialog">Отмена</button><button type="submit" class="button primary">Загрузить и разобрать</button></div>
+      </form>
+    </dialog>
     <dialog id="new-dialog" class="dialog" aria-labelledby="new-dialog-title">
       <form id="new-form">
         <div class="dialog-heading">
@@ -641,7 +677,7 @@
     <dialog id="about-dialog" class="dialog" aria-labelledby="about-title">
       <div class="dialog-heading">
         <div>
-          <span class="eyebrow">OGUZKI · WAVE 6</span>
+          <span class="eyebrow">OGUZKI · MOCK CONNECTOR</span>
           <h2 id="about-title">Помощник. Решение — за вами.</h2>
         </div>
         <button
@@ -669,8 +705,9 @@
         </p>
         <p>
           Примеры написаны специально для демонстрации. Реальные обращения
-          автоматически не загружаются. Нет доставки в игру, аутентификации
-          операторов и общей производственной интеграции.
+          автоматически не загружаются. Тестовый коннектор имитирует профили
+          и доставку через локальный outbox. Нет реального подключения к игре,
+          Telegram, ClickHouse и аутентификации операторов.
         </p>
         <p>
           Рабочее место доступно на loopback-адресах. База и журнал содержат

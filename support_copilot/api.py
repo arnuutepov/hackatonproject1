@@ -9,17 +9,19 @@ from support_copilot.schemas import TriageRequest, TriageResponse
 from support_copilot.service import triage
 from support_copilot.knowledge import get_knowledge
 from support_copilot.operator import install_handlers, local_access, router as operator_router
+from support_copilot.connector import router as connector_router
 
-app = FastAPI(title="Oguzki Support Copilot", version="0.7.0")
+app = FastAPI(title="Oguzki Support Copilot", version="0.8.0")
 STATIC = Path(__file__).with_name('static')
 app.include_router(operator_router)
+app.include_router(connector_router)
 install_handlers(app)
 
 
 @app.middleware('http')
 async def workspace_headers(request: Request, call_next):
     response = await call_next(request)
-    if request.url.path == '/' or request.url.path.startswith(('/operator/', '/assets/')):
+    if request.url.path == '/' or request.url.path.startswith(('/operator/', '/assets/', '/api/v1/')):
         response.headers['Cache-Control'] = 'no-store'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Referrer-Policy'] = 'no-referrer'
