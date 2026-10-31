@@ -25,11 +25,20 @@ def test_api_is_isolated_token_only_and_matches_core(monkeypatch):
         assert invalid.status_code == 422 and 'PRIVATE' not in invalid.text
 
 
-@pytest.mark.parametrize('token', ['', 'short', 'я' * 32])
+@pytest.mark.parametrize('token', ['short', 'я' * 32])
 def test_startup_rejects_invalid_tokens(monkeypatch, capsys, token):
     monkeypatch.setenv('COPILOT_TRIAGE_TOKEN', token)
     assert main() == 2
     assert 'COPILOT_TRIAGE_TOKEN' in capsys.readouterr().err
+
+
+def test_open_mode_without_token(monkeypatch):
+    monkeypatch.delenv('COPILOT_TRIAGE_TOKEN', raising=False)
+    monkeypatch.setenv('COPILOT_DRAFT_PROVIDER', 'template')
+    with TestClient(app) as client:
+        assert client.get('/health').status_code == 200
+        response = client.post('/triage', json={'kind': 'report', 'messages': [{'text': 'Застрял в текстурах'}]})
+        assert response.status_code == 200
 
 
 def test_missing_dictionary_has_concrete_error(monkeypatch, tmp_path, capsys):
