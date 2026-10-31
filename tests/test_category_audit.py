@@ -1,6 +1,6 @@
 """Synthetic cases: an observing administrator is not automatically the accused."""
 from support_copilot.schemas import TriageRequest
-from support_copilot.service import analyze
+from support_copilot.service import analyze, triage
 import pytest
 
 
@@ -35,3 +35,23 @@ def test_third_party_sanction_request_and_appeals(text, expected):
     result = analyze(request)
     assert result.category == expected
     assert result.needs_human
+
+
+@pytest.mark.parametrize('text,expected', [
+    ('Персонаж не двигается после гаража', 'report.help'),
+    ('Машина не едет после загрузки', 'report.help'),
+    ('Подскажите стоимость лицензии', 'report.question'),
+    ('Скажите мне цену машины', 'report.question'),
+    ('Админ дай денег', 'report.offtopic'),
+    ('Хочу пересмотреть запись', 'report.offtopic'),
+    ('Оплатил донат, персонаж не двигается', 'report.payment'),
+    ('Не могу войти в аккаунт, подскажите стоимость лицензии', 'report.account'),
+    ('Подскажите как обжаловать бан', 'report.complaint'),
+])
+def test_report_help_and_question_with_sensitive_precedence(text, expected):
+    request = TriageRequest.model_validate({'kind': 'report', 'messages': [
+        {'role': 'player', 'text': text}]})
+    result = triage(request, use_configured_provider=False)
+    assert result.category == expected
+    if expected in {'report.payment', 'report.account', 'report.complaint', 'report.question'}:
+        assert result.needs_human
