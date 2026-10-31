@@ -181,7 +181,7 @@ COPILOT_CHAIN_TAMPER_DEMO=1 make chain-tamper
 | Эскалация precision / recall | **65% / 100%** dev; **69% / 100%** silver | Доля needs_human по-прежнему 100%; автоматизация не доказана |
 | Retrieval recall@5 / MRR | 1.0 / 1.0, hybrid и legacy | 7 synthetic-запросов; прирост не заявлен |
 | Gold packet / kappa | 40 кейсов / **pending** | Две независимые формы ещё не заполнены |
-| Проверки Python | 477 passed; optional Schemathesis отдельно пройден | Linux; обязательный набор без QA-зависимости пропускает 1 schema-тест |
+| Проверки Python | 478 passed; optional Schemathesis отдельно пройден | Linux; обязательный набор без QA-зависимости пропускает 1 schema-тест |
 | Safety / draft matrices | 270/270; 133/133 | Offline synthetic, не качество живой модели |
 | HTTP load p95 | **148,57 мс**, 300 запросов / 8 клиентов / 0 ошибок | localhost, template + аудит + SQLite WAL |
 | Model-on p95 | 4,05 с, 6/6 fallback, 0 проверенных планов | Capybara/Qwen; качество генерации не подтверждено |

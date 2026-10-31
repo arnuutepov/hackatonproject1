@@ -91,3 +91,10 @@ def test_feedback_requires_second_reviewer_and_preserves_inference(tmp_path):
 def test_retrieval_does_not_fill_unrelated_short_help_with_rules():
     from support_copilot.knowledge import get_knowledge
     assert get_knowledge().search('Застрял в текстурах')==[]
+
+
+def test_gold_packet_never_overwrites_human_ratings(tmp_path):
+    from support_copilot.quality import prepare_gold
+    file=tmp_path/'rater-a.json';file.write_text('{"rater_id":"human-a","ratings":[]}')
+    with pytest.raises(ValueError,match='overwrite'):prepare_gold([],tmp_path)
+    assert 'human-a' in file.read_text()

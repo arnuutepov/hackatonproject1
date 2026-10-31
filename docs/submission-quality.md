@@ -150,3 +150,18 @@ knowledge без справочников организаторов, Bandit, pi
 KK/UZ 15%, cost/latency 10%. У проекта пока нет доказанного независимого качества
 черновиков: именно два разметчика на подготовленном пакете дадут больше пользы,
 чем ещё одна декоративная панель или заявление «всё 100%».
+
+## Итоговая проверка релиза
+
+`make check`: **478 passed, 1 skipped** (optional Schemathesis отсутствует в основном
+venv), 270/270 регрессий, 133/133 draft checks, 5/5 демо и равенство HTTP/CLI.
+Schemathesis отдельно прошёл в QA-окружении на real/synthetic knowledge.
+Завершённые человеческие формы защищены от перезаписи командой prepare-gold.
+Docker 0.11.0 собран; проверены UID 10001, read-only filesystem, SQLite WAL,
+создание/подпись цепочки и совпадение хеша Python-исходников образа с рабочей версией.
+Gitleaks не нашёл утечек, pip-audit — известных уязвимостей; Bandit medium/high — 0.
+
+[GitHub run 41200762856](https://github.com/BAITC-Hacks/hack-a4a36997-oguzki/actions/runs/41200762856):
+матрица создана, но все jobs остановлены **до первого шага**. GitHub сообщил о
+failed payments/spending limit. Удалённые проверки не выполнены; владелец должен
+проверить Billing & plans и повторить workflow.

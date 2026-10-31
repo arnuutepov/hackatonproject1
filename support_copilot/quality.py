@@ -78,6 +78,12 @@ def metrics(rows):
 
 
 def prepare_gold(rows, directory, count=40):
+    for name in ('rater-a.json','rater-b.json'):
+        file=directory/name
+        if file.exists():
+            existing=json.loads(file.read_text())
+            if existing.get('rater_id') or any(any(value is not None for key,value in row.items() if key!='case_id') for row in existing.get('ratings',[])):
+                raise ValueError('Refusing to overwrite existing human ratings; choose a new output directory')
     if not 30<=count<=50 or len(rows)<count:raise ValueError('Gold packet requires 30..50 cases')
     # Stratify language, then fill by a deterministic hash. This is already-seen dev, not blind gold.
     ordered=sorted(rows,key=lambda r:hashlib.sha256(r['ticket_id'].encode()).hexdigest())
