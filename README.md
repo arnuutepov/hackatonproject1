@@ -1,5 +1,12 @@
 # Oguzki · Support Copilot
 
+> **Для жюри (Linux):** положите `rules.json` и `taxonomy.json` в `data/handout-2026-10-27/`, затем
+> `make install && make predict IN=tickets.jsonl OUT=pred.jsonl`. Вход — контракт `{kind, messages}`
+> **или** сырой формат организаторов (`ticket_id`, `images_count`, сообщения `admin` отбрасываются);
+> `ticket_id`/`id` переносится в каждую строку выхода, некорректная строка не останавливает прогон
+> (ответ с `needs_human=true`). HTTP: `make serve-api` — без `COPILOT_TRIAGE_TOKEN` `/triage` открыт
+> на 127.0.0.1:8000 без авторизации (`COPILOT_HOST=0.0.0.0` для внешнего доступа).
+
 **Для быстрого показа и сдачи:** [НАЧНИ-ЗДЕСЬ.md](НАЧНИ-ЗДЕСЬ.md).
 Windows: `START-MVP.cmd` запускает интерфейс, `TEST-MVP.cmd` проверяет HTTP/CLI
 без ключа. [Отчёт](ОТЧЁТ-ДЛЯ-СДАЧИ.md) · [Сценарий показа](ДЕМО-ДЛЯ-ЖЮРИ.md) ·
