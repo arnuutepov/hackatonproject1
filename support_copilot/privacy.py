@@ -10,7 +10,8 @@ PATTERNS=[
  (re.compile(r'(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b'),'[EMAIL]'),
  (re.compile(r'(?<!\w)\+?\d[\d ()-]{9,}\d(?!\w)'),'[PHONE_OR_PAYMENT_ID]'),
  (re.compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b'),'[IP]'),
- (re.compile(r'\b[A-Za-z][A-Za-z0-9]{1,24}_[A-Za-z][A-Za-z0-9_]{1,24}\b'),'[NICKNAME]'),
+ # Name_Surname in Latin or Cyrillic: over-masking an outbound place name costs nothing, a leaked nickname does.
+ (re.compile(r'\b[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9]{1,24}_[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_]{1,24}\b'),'[NICKNAME]'),
 ]
 
 
