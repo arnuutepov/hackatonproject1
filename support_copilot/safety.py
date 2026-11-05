@@ -46,6 +46,18 @@ INJECTION = re.compile(
     r'нұсқау[^\n]{0,30}елеме|ko.rsatmalarni[^\n]{0,35}(?:qoldir|unut)|'
     r'(?:category|priority)[\s"\x27:=]+(?:report\.|complaint\.|p[0-3])')
 
+# Server number: «сервер 4», «сервера №12», «serverda 7», «серверде 5», «на 4 сервере», «с 4-го сервера».
+SERVER = re.compile(
+    r'(?:сервер|server|srv)[^\W\d_]*\s*(?:№|#|:)?\s*(?P<after>\d{1,3})\b|'
+    r'\b(?:на|с|со|в)\s+(?P<before>\d{1,3})(?:-?(?:м|й|го|ом|ой))?\s+сервер[^\W\d_]*', re.I)
+
+
+def server_number(text: str) -> str | None:
+    """First server number mentioned in `text`, or None."""
+    match = SERVER.search(text)
+    return (match.group('after') or match.group('before')) if match else None
+
+
 CITATION_BLOCKERS = frozenset({'contradictory_messages', 'conflicting_observable_fields',
     'instruction_override_attempt', 'mixed_language_requires_review', 'suspected_kazakh_encoding',
     'mixed_sensitive_topics', 'reported_context_contains_risk'})
@@ -96,7 +108,7 @@ def assess(request: TriageRequest) -> SafetyAssessment:
         (r'\bоплатил\b|\bзаплатил\b', r'не платил|не оплачивал')]:
         if re.search(positive, joined) and re.search(negative, joined):
             flags.add('contradictory_messages')
-    servers = re.findall(r'(?:сервер(?:а|е|у|ом)?|server)\s*(?:№|#|:)?\s*(\d{1,3})\b', text)
+    servers = [match.group('after') or match.group('before') for match in SERVER.finditer(text)]
     if len(set(servers)) > 1:
         flags.add('conflicting_observable_fields')
     raw = '\n'.join(message.text for message in request.messages if message.role == 'player').casefold()

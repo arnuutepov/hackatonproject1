@@ -59,14 +59,27 @@ def test_input_metadata_is_ignored_and_attachment_counts_are_normalized(attachme
     assert 'PRIVATE_' not in response.text
 
 
-def test_bad_batch_preserves_previous_output(tmp_path):
+def test_bad_line_does_not_abort_batch(tmp_path):
     source, output = tmp_path / "in.jsonl", tmp_path / "out.jsonl"
     source.write_text(json.dumps(PAYLOAD) + "\ninvalid\n", encoding="utf-8")
     output.write_text("previous", encoding="utf-8")
-    with pytest.raises(ValueError, match="line 2"):
-        predict(source, output)
-    assert output.read_text() == "previous"
+    assert predict(source, output) == 2
+    rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+    assert rows[1]["needs_human"] is True
+    assert "invalid_input_line" in rows[1]["reasons"]
     assert not list(tmp_path.glob(".predict-*"))
+
+
+def test_raw_organizer_ticket_keeps_id_and_drops_admin(tmp_path):
+    raw = {"ticket_id": "t-1", "kind": "report", "images_count": 1, "messages": [
+        {"role": "player", "text": "Застрял в текстурах"},
+        {"role": "admin", "text": "private admin answer"}]}
+    source, output = tmp_path / "in.jsonl", tmp_path / "out.jsonl"
+    source.write_text(json.dumps(raw, ensure_ascii=False) + "\n", encoding="utf-8")
+    assert predict(source, output) == 1
+    row = json.loads(output.read_text(encoding="utf-8"))
+    assert row["ticket_id"] == "t-1"
+    assert "private admin answer" not in json.dumps(row, ensure_ascii=False)
 
 
 def test_input_cannot_be_overwritten(tmp_path):
