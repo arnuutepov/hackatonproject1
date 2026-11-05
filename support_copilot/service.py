@@ -6,7 +6,7 @@ import sqlite3
 from support_copilot.audit_chain import AuditChain, escalation_payload, triage_payload
 from support_copilot.knowledge import get_knowledge, normalize
 from support_copilot.schemas import DraftReply, Extracted, TriageRequest, TriageResponse
-from support_copilot.safety import assess, safety_view
+from support_copilot.safety import SERVER, assess, safety_view, server_number
 
 logger = logging.getLogger('uvicorn.error')
 
@@ -48,8 +48,7 @@ TOPICS = {
     'question': (r'\bкак\b|\bгде\b|\bможно\b|\bсколько\b|\bзачем\b|\bкогда\b|\bhow\b|\bwhere\b|qanday|qayer|қалай|қайда|каким|'
                  r'\b(?:подскажите|скажите|уточните)\s+(?:мне\s+)?(?:стоимость|цену|цен[ауе]|сколько|где|как)\b'),
 }
-# Russian case forms: «на сервере 4», «с сервера 12».
-SERVER = re.compile(r'(?:сервер(?:а|е|у|ом)?|server)\s*(?:№|#|:)?\s*(\d{1,3})\b', re.I)
+# SERVER (imported from safety) covers case forms and word order: «на сервере 4», «с сервера 12», «на 4 сервере».
 MOVEMENT_ISSUE = re.compile(r'\b(?:персонаж|герой|машина|транспорт)\w*\s+не\s+(?:двигается|движется|едет)\b')
 PATTERNS = {key: re.compile(value, re.I) for key, value in TOPICS.items()}
 
@@ -87,6 +86,36 @@ COMPLAINT_INTENT = re.compile(
     r'жалоб|пожалова|нарушает|нарушил|нарушени|nonrp|нон ?рп|\bнрп\b|флуд|багоюз|баг ?аюз|'
     r'мешает|помеха|zhalob|jalob|shikoyat|qoidani buz|шағым|ереже\w* бұз|report (?:a |this )?player')
 NICKNAME = re.compile(r'\b[A-Za-z][A-Za-z0-9]{1,24}_[A-Za-z][A-Za-z0-9_]{1,24}\b')
+# Extraction only (category selection keeps the strict Latin NICKNAME above). A Cyrillic or mixed
+# «Имя_Фамилия» is accepted only after a marker word, so places such as «Москва_Сити» are not nicknames.
+_NICK_CHARS = 'A-Za-zА-Яа-яЁё'
+MARKED_NICKNAME = re.compile(
+    r'(?:игрок\w*|ник\w*|nick\w*|player|админ\w*|нарушител\w*|читер\w*)\s*[:\-—]?\s*'
+    rf'(?P<nick>[{_NICK_CHARS}][{_NICK_CHARS}0-9]{{1,24}}_[{_NICK_CHARS}][{_NICK_CHARS}0-9_]{{1,24}})\b', re.I)
+LABELED_NICKNAME = re.compile(r'\b(?:ник(?:нейм)?|nick(?:name)?)\s*[:=]\s*(?P<nick>[^\W_][\w]{2,24})\b', re.I)
+
+
+def extract_nickname(text: str) -> str | None:
+    """Latin Name_Surname first (unchanged behaviour), then marked Cyrillic form or «ник: X»."""
+    match = NICKNAME.search(text)
+    if match:
+        return match.group()
+    match = MARKED_NICKNAME.search(text) or LABELED_NICKNAME.search(text)
+    return match.group('nick') if match else None
+
+
+# Real-life threats. Past tense («убил») and bare in-game talk («найду и убью») are not enough:
+# a violence word must sit next to an explicit out-of-game marker or a home/address reference.
+_VIOLENCE = (r"убь(?:ет|ют|ешь|ем)|убью|убить|убива\w+|изобь\w+|побью|избить|прирежу|зарежу|сожгу|расправ\w+|"
+             r"\bkill\s+(?:me|you|us|my|your)\b|\b(?:will|gonna|going to)\s+kill\b|\bmurder\w*|o'?ldir\w*|ўлдир\w*|өлтір\w*")
+_OUT_OF_GAME = (r"в реале|в реальной жизни|реальной жизни|вне игры|\birl\b|real[ -]?life|in real life|"
+                r"haqiqiy hayot\w*|hayotda|шын өмірде|нақты өмірде")
+CRITICAL = re.compile(
+    r'массов[^\n]{0,100}баг|(?:все|всех)[^\n]{0,100}вылета|mass[^\n]{0,100}bug|'
+    r'угро[зж][^\n]{0,100}(?:жизн|реал)|убью[^\n]{0,100}(?:реал|жизн)|kill you[^\n]{0,100}real|'
+    rf'(?:{_VIOLENCE})[^\n]{{0,100}}(?:{_OUT_OF_GAME})|(?:{_OUT_OF_GAME})[^\n]{{0,100}}(?:{_VIOLENCE})|'
+    rf'(?:приед\w*|придет|придут|найд\w+|вычисл\w+)[^\n]{{0,60}}(?:домой|по адресу|к тебе|ко мне)[^\n]{{0,60}}(?:{_VIOLENCE})|'
+    rf'(?:{_VIOLENCE})[^\n]{{0,60}}(?:домой|по адресу)')
 # Explicit requests aimed at a third party are not an appeal against the
 # reporter's own sanction. Used only for category selection, never safety.
 THIRD_PARTY_SANCTION_REQUEST = re.compile(
@@ -218,7 +247,28 @@ def rule_category(request: TriageRequest) -> tuple[str, float, bool, dict[str, s
     return category, certainty, bool(APPEAL.search(t)), model_vetoes(t, topics)
 
 
+def complaints_always_human() -> bool:
+    """On by default: every complaint goes to a person. `COPILOT_COMPLAINTS_ALWAYS_HUMAN=off` exists only to
+    measure a narrower escalation policy offline (tools/escalation_report.py); safety gates stay in force."""
+    return os.environ.get('COPILOT_COMPLAINTS_ALWAYS_HUMAN', 'on').strip().lower() != 'off'
+
+
+# Every analysis step is linear in the text, but the contract admits 100 x 20 000 characters:
+# beyond this budget the text is cut per message and the case is handed to a human.
+MAX_ANALYSIS_CHARS = 40_000
+
+
+def bound_request(request: TriageRequest) -> tuple[TriageRequest, bool]:
+    """Return (request limited to MAX_ANALYSIS_CHARS in total, whether anything was cut)."""
+    if sum(len(message.text) for message in request.messages) <= MAX_ANALYSIS_CHARS:
+        return request, False
+    per_message = max(1, MAX_ANALYSIS_CHARS // len(request.messages))
+    messages = [message.model_copy(update={'text': message.text[:per_message]}) for message in request.messages]
+    return request.model_copy(update={'messages': messages}), True
+
+
 def analyze(request: TriageRequest) -> TriageResponse:
+    request, truncated = bound_request(request)
     knowledge = get_knowledge()
     text, assessment, t, topics = _rule_inputs(request)
     lang, language_note = language(t)
@@ -236,8 +286,7 @@ def analyze(request: TriageRequest) -> TriageResponse:
             raise ValueError('Category incompatible with taxonomy')
     # Escalation never relies on the learned category alone: either category can require a human.
     reviewed = {category, rules_category}
-    critical = bool(topics & {'payment', 'account'}) or bool(re.search(
-        r'массов[^\n]{0,100}баг|(?:все|всех)[^\n]{0,100}вылета|mass[^\n]{0,100}bug|угро[зж][^\n]{0,100}(?:жизн|реал)|убью[^\n]{0,100}(?:реал|жизн)|kill you[^\n]{0,100}real', t))
+    critical = bool(topics & {'payment', 'account'}) or bool(CRITICAL.search(t))
     if critical:
         priority = 'p0'
     elif topics & {'cheat', 'rmt_ads'} or ('scam' in topics and re.search(r'миллион|млн|крупн|million', t)):
@@ -266,10 +315,13 @@ def analyze(request: TriageRequest) -> TriageResponse:
     mandatory_review = bool(reviewed & knowledge.human_always) or 'report.complaint' in reviewed
     # Recognizing a movement failure is not a verified fix for it.
     movement_review = bool(MOVEMENT_ISSUE.search(t))
-    human = (bool(assessment.flags) or critical or mandatory_review or movement_review or request.kind == 'complaint'
-             or 'admin' in topics or incomplete)
+    human = (bool(assessment.flags) or critical or mandatory_review or movement_review
+             or (request.kind == 'complaint' and complaints_always_human())
+             or 'admin' in topics or incomplete or truncated)
     reasons = ['wave_2_lexical_baseline', 'confidence_is_uncalibrated', 'draft_generator_not_connected',
                'duplicate_scope_within_ticket']
+    if truncated:
+        reasons.append('input_truncated_for_analysis')
     if knowledge.taxonomy.get('version', '').startswith('draft'):
         reasons.append('taxonomy_is_draft')
     if language_note:
@@ -287,8 +339,8 @@ def analyze(request: TriageRequest) -> TriageResponse:
     attachments = sum(message.attachments for message in request.messages)
     if attachments:
         reasons.append('attachments_reported_not_inspected')
-    nickname = re.search(r'\b[A-Za-z][A-Za-z0-9]{1,24}_[A-Za-z][A-Za-z0-9_]{1,24}\b', text)
-    server = re.search(SERVER, text)
+    nickname = extract_nickname(text)
+    server = server_number(text)
     notices = {
         'ru': 'Автоматический черновик пока недоступен.',
         'kk': 'Автоматты жауап жобасы әзірге қолжетімсіз.',
@@ -304,8 +356,8 @@ def analyze(request: TriageRequest) -> TriageResponse:
         reasons.append('repeated_player_message_simhash')
     return TriageResponse(
         lang=lang, category=category, priority=priority, is_spam_or_duplicate=duplicate,
-        extracted=Extracted(nickname=nickname.group() if nickname else None, rule_refs=references,
-                            server=server.group(1) if server and 'conflicting_observable_fields' not in assessment.flags else None, attachments_claimed=attachments,
+        extracted=Extracted(nickname=nickname, rule_refs=references,
+                            server=server if server and 'conflicting_observable_fields' not in assessment.flags else None, attachments_claimed=attachments,
                             has_evidence=False),
         draft_reply=DraftReply(lang=lang, text=notices[lang]), needs_human=human,
         confidence=certainty if not incomplete else min(certainty, .25), reasons=reasons,
@@ -320,7 +372,8 @@ def triage(request: TriageRequest, *, draft_provider=None, use_configured_provid
            use_verified_templates: bool | None = None) -> TriageResponse:
     from support_copilot.drafting import add_draft
     from support_copilot.rule_question import answer as answer_rule_question, matches as matches_rule_question
-    result = analyze(request)
+    result = analyze(request)  # bounds the text itself and records input_truncated_for_analysis
+    request, _ = bound_request(request)  # the draft steps below see the same bounded text
     result.reasons.remove('draft_generator_not_connected')
     # Explicitly injected providers exercise their path; normal API/CLI requests
     # can skip generation entirely for narrow, verified support workflows.
